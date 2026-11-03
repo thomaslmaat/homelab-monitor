@@ -23,7 +23,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: agent
-          image: ghcr.io/thomaslmaat/homelab-monitor-agent:v0.1.0
+          image: ghcr.io/thomaslmaat/homelab-monitor-agent:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: CORE_URL

@@ -40,7 +40,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: core
-          image: ghcr.io/thomaslmaat/homelab-monitor:v0.1.0
+          image: ghcr.io/thomaslmaat/homelab-monitor-core:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
