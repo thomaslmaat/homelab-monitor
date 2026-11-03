@@ -107,6 +107,16 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"hosts": hostViews(hosts), "cluster": cluster, "generated_at": time.Now().UTC()})
 }
+func (s *Server) storage(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+	if s.kube == nil {
+		writeJSON(w, 503, map[string]any{"available": false, "error": "Kubernetes client is not configured", "claims": []any{}, "persistent_volumes": []any{}, "volumes": []any{}})
+		return
+	}
+	writeJSON(w, 200, s.kube.Storage(ctx))
+}
+
 func hostViews(hosts []model.HostMetrics) []HostView {
 	out := make([]HostView, 0, len(hosts))
 	now := time.Now()
