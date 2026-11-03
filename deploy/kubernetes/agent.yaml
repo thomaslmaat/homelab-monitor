@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: homelab-monitor-agent
+  namespace: homelab-monitor
+  labels:
+    app.kubernetes.io/name: homelab-monitor-agent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: homelab-monitor-agent
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: homelab-monitor-agent
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - operator: Exists # Also collect control-plane nodes with NoSchedule taints.
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: agent
+          image: ghcr.io/thomaslmaat/homelab-monitor-agent:v0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CORE_URL
+              value: http://homelab-monitor.homelab-monitor.svc.cluster.local:8080
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: PROC_ROOT
+              value: /host/proc
+            - name: SYS_ROOT
+              value: /host/sys
+            - name: ROOT_FS
+              value: /host/root
+            - name: COLLECTION_INTERVAL
+              value: 15s
+          volumeMounts:
+            - name: host-proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: host-sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: host-root
+              mountPath: /host/root
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 24Mi }
+            limits: { cpu: 200m, memory: 96Mi }
+          securityContext:
+            runAsUser: 0 # Read-only host telemetry; all Linux capabilities are dropped.
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: host-proc
+          hostPath:
+            path: /proc
+            type: Directory
+        - name: host-sys
+          hostPath:
+            path: /sys
+            type: Directory
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory

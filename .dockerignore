@@ -1,0 +1,6 @@
+.git
+.github
+*.zip
+*.db
+*.sqlite
+node_modules

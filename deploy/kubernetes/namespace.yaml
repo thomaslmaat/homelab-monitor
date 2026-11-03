@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homelab-monitor
+  labels:
+    app.kubernetes.io/name: homelab-monitor
+    app.kubernetes.io/part-of: homelab-monitor
