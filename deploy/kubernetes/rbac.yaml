@@ -10,7 +10,10 @@ metadata:
   name: homelab-monitor-reader
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "pods", "namespaces", "events"]
+    resources: ["nodes", "pods", "namespaces", "events", "persistentvolumes", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["longhorn.io"]
+    resources: ["volumes"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
