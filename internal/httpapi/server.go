@@ -35,6 +35,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/hosts", s.hosts)
 	mux.HandleFunc("GET /api/v1/history", s.history)
 	mux.HandleFunc("GET /api/v1/overview", s.overview)
+	mux.HandleFunc("GET /api/v1/storage", s.storage)
 	mux.Handle("/", dashboard.Handler())
 	return securityHeaders(mux)
 }
