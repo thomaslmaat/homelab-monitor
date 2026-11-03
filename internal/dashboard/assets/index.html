@@ -3,27 +3,11 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1020"><title>Homelab Monitor</title><link rel="stylesheet" href="/style.css"></head>
 <body>
 <div class="shell">
- <aside class="sidebar"><div class="brand"><div class="brand-icon">H</div><div><strong>homelab<span>.</span></strong><small>MONITOR</small></div></div><div class="side-label">WORKSPACE</div><a class="nav active" href="#overview"><span>▦</span> Overzicht</a><a class="nav" href="#nodes"><span>▤</span> Nodes</a><a class="nav" href="#workloads"><span>▧</span> Workloads</a><a class="nav" href="#storage"><span>◫</span> Storage</a><div class="side-bottom"><div class="side-label">SYSTEM</div><div class="cluster-mini"><i></i><div><b>Kubernetes cluster</b><small id="sidebar-status">Verbinden…</small></div></div><div class="version">HOMELAB MONITOR <b>v0.1.0</b></div></div></aside>
- <main class="main">
-  <header class="topbar"><div class="crumb">Workspace <span>/</span> <b>Overzicht</b></div><div class="top-actions"><span class="live"><i></i><span id="connection-label">LIVE DATA</span></span><button id="refresh" class="icon-btn" title="Ververs nu">↻</button><div class="avatar">HM</div></div></header>
-  <section class="content">
-   <div class="welcome"><div><div class="eyebrow">INFRASTRUCTURE OVERVIEW</div><h1>Goedemorgen 👋</h1><p>Dit is wat er op dit moment in je homelab gebeurt.</p></div><div class="updated">LAATSTE UPDATE <b id="last-updated">—</b></div></div>
-   <div id="demo-banner" class="demo-banner hidden">Voorbeeldweergave · Er zijn nog geen live gegevens ontvangen. De getoonde waarden zijn fictief.</div>
-   <section class="stats" id="summary">
-    <article class="stat-card"><div class="stat-top"><span>CLUSTER NODES</span><span class="stat-icon blue">⌘</span></div><div class="stat-value" id="node-count">—</div><div class="stat-foot"><span id="node-sub">Nodes geregistreerd</span></div></article>
-    <article class="stat-card"><div class="stat-top"><span>ONLINE PODS</span><span class="stat-icon violet">▦</span></div><div class="stat-value" id="pod-count">—</div><div class="stat-foot"><span id="pod-sub">Running workloads</span></div></article>
-    <article class="stat-card"><div class="stat-top"><span>CPU GEMIDDELD</span><span class="stat-icon cyan">◉</span></div><div class="stat-value" id="cpu-average">—</div><div class="stat-foot"><span>Over gemonitorde nodes</span></div></article>
-    <article class="stat-card"><div class="stat-top"><span>GEHEUGEN GEBRUIK</span><span class="stat-icon orange">▥</span></div><div class="stat-value" id="memory-average">—</div><div class="stat-foot"><span>Gemiddeld per node</span></div></article>
-   </section>
-   <div class="section-heading"><div><h2>Node health</h2><p>Automatisch ontdekt via Kubernetes en de Homelab Monitor agents.</p></div><a href="#nodes">Alle nodes <span>→</span></a></div>
-   <section id="node-grid" class="node-grid"></section>
-   <div class="lower-grid">
-    <section class="panel workload-panel"><div class="panel-head"><div><h2>Workload status</h2><p>Pod-status in het hele cluster</p></div><span class="pill" id="workload-total">— pods</span></div><div class="workload-bars" id="workload-bars"></div><div class="legend"><span><i class="green"></i> Running</span><span><i class="yellow"></i> Pending</span><span><i class="red"></i> Failed / overig</span></div></section>
-    <section class="panel activity-panel"><div class="panel-head"><div><h2>Agent status</h2><p>Heartbeat van iedere node</p></div><span class="pill good" id="agent-health">—</span></div><div id="agent-list" class="agent-list"></div></section>
-   </div>
-   <section class="panel pods-panel"><div class="panel-head"><div><h2>Recente workloads</h2><p>Overzicht van pods die in het cluster draaien</p></div><input id="pod-filter" class="search" placeholder="Zoek namespace of pod…" /></div><div class="table-wrap"><table><thead><tr><th>POD</th><th>NAMESPACE</th><th>NODE</th><th>STATUS</th><th>READY</th><th>RESTARTS</th></tr></thead><tbody id="pod-table"></tbody></table></div></section>
-   <footer>HOMELAB MONITOR <span>SELF-HOSTED · OPEN SOURCE · MIT</span></footer>
-  </section>
- </main>
-</div><script src="/app.js"></script>
-</body></html>
+ <aside class="sidebar"><div class="brand"><div class="brand-icon">H</div><div><strong>homelab<span>.</span></strong><small>MONITOR</small></div></div><div class="side-label">WORKSPACE</div>
+ <a class="nav active" href="#overview" data-route="overview"><span>▦</span> Overzicht</a><a class="nav" href="#nodes" data-route="nodes"><span>▤</span> Nodes</a><a class="nav" href="#workloads" data-route="workloads"><span>▧</span> Workloads</a><a class="nav" href="#storage" data-route="storage"><span>◫</span> Storage</a>
+ <div class="side-bottom"><div class="side-label">SYSTEM</div><div class="cluster-mini"><i></i><div><b>Kubernetes cluster</b><small id="sidebar-status">Verbinden…</small></div></div><div class="version">HOMELAB MONITOR <b>v0.2.0</b></div></div></aside>
+ <main class="main"><header class="topbar"><div class="crumb">Workspace <span>/</span> <b id="breadcrumb">Overzicht</b></div><div class="top-actions"><span class="live"><i></i><span id="connection-label">LIVE DATA</span></span><button id="refresh" class="icon-btn" title="Ververs nu" aria-label="Ververs nu">↻</button><div class="avatar">HM</div></div></header>
+ <section class="content"><div class="welcome"><div><div class="eyebrow" id="page-eyebrow">INFRASTRUCTURE OVERVIEW</div><h1 id="page-title">Goedemorgen 👋</h1><p id="page-description">Dit is wat er op dit moment in je homelab gebeurt.</p></div><div class="updated">LAATSTE UPDATE <b id="last-updated">—</b></div></div>
+ <div id="demo-banner" class="demo-banner hidden">Voorbeeldweergave · Er zijn nog geen live gegevens ontvangen. De getoonde waarden zijn fictief.</div><div id="page-content" aria-live="polite"></div>
+ <footer>HOMELAB MONITOR <span>SELF-HOSTED · OPEN SOURCE · MIT</span></footer></section></main>
+</div><script src="/app.js" defer></script></body></html>
