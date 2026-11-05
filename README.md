@@ -69,12 +69,30 @@ docker build --build-arg COMPONENT=agent -t homelab-monitor-agent:dev .
 
 The overview read endpoints are read-only. Keep the dashboard behind a trusted ingress/VPN or add ingress authentication before exposing it publicly. Do not expose the Core directly to the public internet.
 
+## Customizable dashboard (v0.3)
+
+The dashboard now supports a personal widget layout:
+- Add and remove dashboard widgets.
+- Drag widgets to reorder them.
+- Layout is saved in the browser's local storage and survives refreshes on that browser.
+- Built-in widgets: cluster status, node health, workloads, storage/Longhorn and agent status.
+- Dedicated pages for Nodes, Workloads, Storage and Integrations.
+- Responsive layout for desktop and mobile.
+
+The current preference storage is browser-local (not yet synchronized between browsers or users). The integrations page reports the status of the Kubernetes API, Longhorn API and Homelab Monitor agents. Longhorn data is read through the Kubernetes API using the Longhorn CRD; it does not use the Longhorn UI endpoint or credentials.
+
+### Integrations and permissions
+
+The Core uses read-only Kubernetes API access. At minimum, its ServiceAccount needs `get`, `list` and `watch` on nodes, pods, namespaces, events, deployments, daemonsets, statefulsets, replicasets, persistentvolumes, persistentvolumeclaims and the Longhorn `volumes.longhorn.io` resource. Do not grant write permissions for dashboard monitoring.
+
+Only integrations that have a working API connector and the required RBAC/credentials can show live data. A plugin card is not a substitute for configuring that service.
+
 ## Current limitations
 
 - Linux nodes only; Windows nodes are ignored by the DaemonSet node selector.
 - CPU temperature depends on available `/sys/class/thermal` sensors and may be absent on some hardware.
 - Container CPU/memory usage is not yet collected; v0.1 reports pod state and host-level resource usage. Kubelet/cAdvisor stats integration is planned.
-- Longhorn volume/replica health, alerts, dashboard editing and configurable retention are planned. The current Core prunes metric history older than seven days.
+- Longhorn volume/replica health, alerts, cross-browser dashboard sync, a user/account system, additional external-service connectors and configurable retention are planned. The current Core prunes metric history older than seven days.
 - SQLite is single-writer and Core runs one replica. Agent pods are distributed and automatically scale with Linux node count.
 
 ## License
