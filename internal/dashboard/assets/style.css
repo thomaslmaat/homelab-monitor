@@ -51,3 +51,11 @@ td{border-bottom-color:rgba(119,157,207,.1)}tr:hover td{background:rgba(73,131,2
 footer{border-top:1px solid rgba(115,164,227,.09);margin-top:26px}
 @media(max-width:720px){.command-trigger{padding:6px}.command-trigger span{display:none}.command-backdrop{padding-top:10vh}.command-footer{gap:9px;justify-content:space-between}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+/* Live integration registry */
+.integration-intro{margin:0 0 14px;padding:15px 17px;border:1px solid rgba(91,177,255,.2);border-radius:12px;background:linear-gradient(110deg,rgba(24,55,88,.45),rgba(17,26,45,.72))}
+.integration-intro b{font-size:13px}.integration-intro p,.integration-card p,.integration-card small,.integration-next p{display:block;color:var(--muted);font-size:11px;line-height:1.6;margin:5px 0 12px}
+.integration-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.integration-title h2{font-size:14px;margin:0}
+.integration-card{min-width:0;transition:transform .2s,border-color .2s,box-shadow .2s}.integration-card:hover{transform:translateY(-2px);border-color:rgba(85,213,220,.35);box-shadow:0 12px 32px rgba(0,0,0,.2),0 0 24px rgba(85,213,220,.06)}
+.capability-list{display:flex;gap:6px;flex-wrap:wrap;margin-top:13px}.capability-list .tag{background:rgba(38,91,112,.25);color:#9bdde2;border:1px solid rgba(85,213,220,.15)}
+.integration-next{margin-top:16px}.integration-next h2{font-size:13px;margin:0}
