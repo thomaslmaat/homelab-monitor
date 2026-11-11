@@ -1,0 +1,27 @@
+name: Go tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run tests
+        run: go test ./...
+      - name: Build Core
+        run: CGO_ENABLED=0 go build ./cmd/core
+      - name: Build Agent
+        run: CGO_ENABLED=0 go build ./cmd/agent

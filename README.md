@@ -79,13 +79,13 @@ The dashboard now supports a personal widget layout:
 - Dedicated pages for Nodes, Workloads, Storage and Integrations.
 - Responsive layout for desktop and mobile.
 
-The current preference storage is browser-local (not yet synchronized between browsers or users). The integrations page reports the status of the Kubernetes API, Longhorn API and Homelab Monitor agents. Longhorn data is read through the Kubernetes API using the Longhorn CRD; it does not use the Longhorn UI endpoint or credentials.
+The current preference storage is browser-local (not yet synchronized between browsers or users). The integrations page reads the built-in adapter registry at `GET /api/v1/integrations` and reports live health for the Kubernetes API, Longhorn resources and Homelab Monitor agents. Longhorn data is read through the Kubernetes API using the Longhorn CRD; it does not use the Longhorn UI endpoint or credentials. The adapter registry is an internal, compiled-in extension point; it does not load arbitrary third-party code at runtime.
 
 ### Integrations and permissions
 
 The Core uses read-only Kubernetes API access. At minimum, its ServiceAccount needs `get`, `list` and `watch` on nodes, pods, namespaces, events, deployments, daemonsets, statefulsets, replicasets, persistentvolumes, persistentvolumeclaims and the Longhorn `volumes.longhorn.io` resource. Do not grant write permissions for dashboard monitoring.
 
-Only integrations that have a working API connector and the required RBAC/credentials can show live data. A plugin card is not a substitute for configuring that service.
+Only integrations that have a working API connector and the required RBAC/credentials can show live data. A plugin card is not a substitute for configuring that service. The initial registry exposes read-only capabilities only; it does not yet provide game-server power actions or third-party integrations.
 
 ## Current limitations
 
@@ -98,3 +98,8 @@ Only integrations that have a working API connector and the required RBAC/creden
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+
+## Homelab Control Center roadmap
+
+Phase 1 now includes a typed, in-process adapter registry, three built-in read-only adapters and a live integration inventory API consumed by the dashboard. The long-term Control Center architecture and eight delivery phases are documented in [`docs/control-center-roadmap.md`](docs/control-center-roadmap.md). The secure integration adapter contract and proposed game-server configuration are in [`docs/integrations/adapter-contract.md`](docs/integrations/adapter-contract.md). These documents are the implementation plan; planned connectors and control actions are not enabled until their adapters, permissions, tests and UI are implemented.
