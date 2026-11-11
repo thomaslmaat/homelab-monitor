@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/thomaslmaat/homelab-monitor/internal/dashboard"
+	"github.com/thomaslmaat/homelab-monitor/internal/gameservers"
 	"github.com/thomaslmaat/homelab-monitor/internal/integrations"
 	"github.com/thomaslmaat/homelab-monitor/internal/kubernetes"
 	"github.com/thomaslmaat/homelab-monitor/internal/model"
@@ -21,6 +22,7 @@ type Server struct {
 	token string
 	kube  *kubernetes.Client
 	registry *integrations.Registry
+	gameServers []gameservers.Config
 }
 type HostView struct {
 	model.HostMetrics
@@ -30,6 +32,8 @@ type HostView struct {
 
 func New(store *storage.Store, kube *kubernetes.Client) *Server {
 	s := &Server{store: store, token: os.Getenv("HOMELAB_MONITOR_TOKEN"), kube: kube, registry: integrations.NewRegistry()}
+	configured, err := gameservers.Parse(os.Getenv("GAME_SERVERS_JSON"))
+	if err != nil { log.Printf("game server configuration rejected: %v", err) } else { s.gameServers = configured }
 	_ = s.registry.Register(integrations.FuncAdapter{AdapterID:"kubernetes", DisplayName:"Kubernetes API", AdapterKind:"infrastructure", AdapterVersion:"built-in", Supported:[]integrations.Capability{{ID:"resources.read",Description:"Read cluster nodes, pods and deployments"}}, HealthCheck:func(ctx context.Context) integrations.Health {
 		if s.kube == nil { return integrations.Health{Status:"not_configured",Message:"In-cluster Kubernetes client is unavailable"} }
 		if !s.kube.Overview(ctx).Available { return integrations.Health{Status:"degraded",Message:"Kubernetes API could not return cluster inventory"} }
@@ -58,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/overview", s.overview)
 	mux.HandleFunc("GET /api/v1/storage", s.storage)
 	mux.HandleFunc("GET /api/v1/integrations", s.integrations)
+	mux.HandleFunc("GET /api/v1/game-servers", s.gameServersInventory)
 	mux.Handle("/", dashboard.Handler())
 	return securityHeaders(mux)
 }
@@ -169,4 +174,23 @@ func (s *Server) integrations(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	writeJSON(w, http.StatusOK, map[string]any{"integrations": s.registry.List(ctx), "generated_at": time.Now().UTC()})
+}
+
+func (s *Server) gameServersInventory(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+	if len(s.gameServers) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"configured": false, "game_servers": []gameservers.View{}, "message": "No game servers configured"})
+		return
+	}
+	if s.kube == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"configured": true, "game_servers": gameservers.Unknown(s.gameServers), "error": "Kubernetes client is not configured"})
+		return
+	}
+	cluster := s.kube.Overview(ctx)
+	if !cluster.Available {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"configured": true, "game_servers": gameservers.Unknown(s.gameServers), "error": cluster.Error})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"configured": true, "game_servers": gameservers.Resolve(s.gameServers, cluster.Deployments)})
 }
