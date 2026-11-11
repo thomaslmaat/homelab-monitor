@@ -70,3 +70,21 @@ func (r *Registry) List(ctx context.Context) []Snapshot {
 	sort.Slice(out, func(i,j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
+
+type FuncAdapter struct {
+	AdapterID string
+	DisplayName string
+	AdapterKind string
+	AdapterVersion string
+	Supported []Capability
+	HealthCheck func(context.Context) Health
+}
+func (a FuncAdapter) ID() string { return a.AdapterID }
+func (a FuncAdapter) Name() string { return a.DisplayName }
+func (a FuncAdapter) Kind() string { return a.AdapterKind }
+func (a FuncAdapter) Version() string { return a.AdapterVersion }
+func (a FuncAdapter) Capabilities() []Capability { return append([]Capability(nil), a.Supported...) }
+func (a FuncAdapter) Check(ctx context.Context) Health {
+	if a.HealthCheck == nil { return Health{Status:"unknown", Message:"No health check configured"} }
+	return a.HealthCheck(ctx)
+}
