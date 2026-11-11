@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/thomaslmaat/homelab-monitor/internal/dashboard"
+	"github.com/thomaslmaat/homelab-monitor/internal/integrations"
 	"github.com/thomaslmaat/homelab-monitor/internal/kubernetes"
 	"github.com/thomaslmaat/homelab-monitor/internal/model"
 	"github.com/thomaslmaat/homelab-monitor/internal/storage"
 	"log"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -18,6 +20,7 @@ type Server struct {
 	store *storage.Store
 	token string
 	kube  *kubernetes.Client
+	registry *integrations.Registry
 }
 type HostView struct {
 	model.HostMetrics
@@ -26,7 +29,25 @@ type HostView struct {
 }
 
 func New(store *storage.Store, kube *kubernetes.Client) *Server {
-	return &Server{store: store, token: os.Getenv("HOMELAB_MONITOR_TOKEN"), kube: kube}
+	s := &Server{store: store, token: os.Getenv("HOMELAB_MONITOR_TOKEN"), kube: kube, registry: integrations.NewRegistry()}
+	_ = s.registry.Register(integrations.FuncAdapter{AdapterID:"kubernetes", DisplayName:"Kubernetes API", AdapterKind:"infrastructure", AdapterVersion:"built-in", Supported:[]integrations.Capability{{ID:"resources.read",Description:"Read cluster nodes, pods and deployments"}}, HealthCheck:func(ctx context.Context) integrations.Health {
+		if s.kube == nil { return integrations.Health{Status:"not_configured",Message:"In-cluster Kubernetes client is unavailable"} }
+		if !s.kube.Overview(ctx).Available { return integrations.Health{Status:"degraded",Message:"Kubernetes API could not return cluster inventory"} }
+		return integrations.Health{Status:"connected",Message:"Cluster inventory is readable"}
+	}})
+	_ = s.registry.Register(integrations.FuncAdapter{AdapterID:"longhorn", DisplayName:"Longhorn", AdapterKind:"storage", AdapterVersion:"built-in", Supported:[]integrations.Capability{{ID:"resources.read",Description:"Read PVC, PV and Longhorn volume health"}}, HealthCheck:func(ctx context.Context) integrations.Health {
+		if s.kube == nil { return integrations.Health{Status:"not_configured",Message:"Kubernetes client is unavailable"} }
+		v := s.kube.Storage(ctx)
+		if !v.Available { return integrations.Health{Status:"degraded",Message:"Storage API unavailable; check PVC/PV and Longhorn read permissions"} }
+		return integrations.Health{Status:"connected",Message:"Storage resources are readable"}
+	}})
+	_ = s.registry.Register(integrations.FuncAdapter{AdapterID:"homelab-agents", DisplayName:"Homelab Agents", AdapterKind:"monitoring", AdapterVersion:"built-in", Supported:[]integrations.Capability{{ID:"metrics.read",Description:"Read host metrics and agent heartbeat"}}, HealthCheck:func(ctx context.Context) integrations.Health {
+		hosts, err := s.store.Latest(ctx)
+		if err != nil { return integrations.Health{Status:"degraded",Message:"Host metrics could not be read"} }
+		if len(hosts) == 0 { return integrations.Health{Status:"degraded",Message:"No agent heartbeat received yet"} }
+		return integrations.Health{Status:"connected",Message:fmt.Sprintf("%d agent(s) reporting",len(hosts))}
+	}})
+	return s
 }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -36,6 +57,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/history", s.history)
 	mux.HandleFunc("GET /api/v1/overview", s.overview)
 	mux.HandleFunc("GET /api/v1/storage", s.storage)
+	mux.HandleFunc("GET /api/v1/integrations", s.integrations)
 	mux.Handle("/", dashboard.Handler())
 	return securityHeaders(mux)
 }
@@ -141,4 +163,10 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) integrations(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, map[string]any{"integrations": s.registry.List(ctx), "generated_at": time.Now().UTC()})
 }
