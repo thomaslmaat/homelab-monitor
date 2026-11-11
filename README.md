@@ -98,3 +98,8 @@ Only integrations that have a working API connector and the required RBAC/creden
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+
+## Homelab Control Center roadmap
+
+The long-term Control Center architecture and eight delivery phases are documented in [`docs/control-center-roadmap.md`](docs/control-center-roadmap.md). The secure integration adapter contract and proposed game-server configuration are in [`docs/integrations/adapter-contract.md`](docs/integrations/adapter-contract.md). These documents are the implementation plan; planned connectors and control actions are not enabled until their adapters, permissions, tests and UI are implemented.
