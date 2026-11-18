@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const bytes=n=>{if(n==null)return '—';if(!n)return '0 B';const u=['B','KB','MB','GB','TB','PB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return n.toFixed(1)+' '+u[i]};
-const quantityBytes=value=>{const m=String(value??'').trim().match(/^([0-9]+(?:\\.[0-9]+)?)\\s*(Ki|Mi|Gi|Ti|Pi|Ei|K|M|G|T|P|E)?$/i);if(!m)return 0;const unit=(m[2]||'').toLowerCase(),binary={ki:1024,mi:1024**2,gi:1024**3,ti:1024**4,pi:1024**5,ei:1024**6},decimal={k:1e3,m:1e6,g:1e9,t:1e12,p:1e15,e:1e18};return Math.round(Number(m[1])*(binary[unit]||decimal[unit]||1))};
+const quantityBytes=value=>{const m=String(value??'').trim().match(/^([0-9]+(?:\.[0-9]+)?)\s*(Ki|Mi|Gi|Ti|Pi|Ei|K|M|G|T|P|E)?$/i);if(!m)return 0;const unit=(m[2]||'').toLowerCase(),binary={ki:1024,mi:1024**2,gi:1024**3,ti:1024**4,pi:1024**5,ei:1024**6},decimal={k:1e3,m:1e6,g:1e9,t:1e12,p:1e15,e:1e18};return Math.round(Number(m[1])*(binary[unit]||decimal[unit]||1))};
 const pct=(a,b)=>b?Math.min(100,Math.max(0,a/b*100)):0;
 const age=s=>s<5?'zojuist':Math.floor(s)+'s geleden';
 const defaults=['cluster','nodes','workloads','storage','agents'];
