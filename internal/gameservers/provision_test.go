@@ -21,6 +21,7 @@ func TestValidateCreateAllowsMoreThanEightGB(t *testing.T) {
 
 func TestValidateCreateRejectsInvalidValues(t *testing.T) {
 	cases:=[]CreateRequest{
+		{Name:"minecraft-no-eula",Game:"minecraft",Version:"1.21.11",RAMGB:4,StorageGB:10,Port:25565},
 		{Name:"Bad Name",Game:"minecraft",Version:"1.21",RAMGB:4,StorageGB:10,Port:25565,AcceptEULA:true},
 		{Name:"factorio",Game:"factorio",Version:"latest;rm",RAMGB:4,StorageGB:10,Port:34197},
 		{Name:"satisfactory",Game:"satisfactory",Version:"1.0",RAMGB:4,StorageGB:10,Port:7777},
