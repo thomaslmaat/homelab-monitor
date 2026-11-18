@@ -95,6 +95,7 @@ func (s *Server) createManagedGame(w http.ResponseWriter,r *http.Request) {
 	if req.Port==0 {req.Port=template.DefaultPort}
 	id:=name
 	image:=template.Image
+	imageTag:="latest"
 	env:=[]any{}
 	containerPorts:=[]any{}
 	volumeMount:=map[string]any{"name":"data","mountPath":"/data"}
@@ -104,17 +105,19 @@ func (s *Server) createManagedGame(w http.ResponseWriter,r *http.Request) {
 		containerPorts=[]any{port("game",req.Port,"TCP")}
 		volumeMount["mountPath"]="/data"
 	case "satisfactory":
-		env=[]any{envVar("MAXPLAYERS","4"),envVar("SERVERGAMEPORT",strconv.Itoa(req.Port)),envVar("SERVERMESSAGINGPORT","8888"),envVar("SERVERBEACONPORT","15000"),envVar("PGID","1000"),envVar("PUID","1000"),envVar("STEAMBETA","false")}
-		containerPorts=[]any{port("game-udp",req.Port,"UDP"),port("game-tcp",req.Port,"TCP"),port("messaging",8888,"UDP"),port("beacon",15000,"UDP")}
+		beta:="false";if req.Version=="experimental"{beta="true"}
+		env=[]any{envVar("MAXPLAYERS","4"),envVar("SERVERGAMEPORT",strconv.Itoa(req.Port)),envVar("SERVERMESSAGINGPORT","8888"),envVar("PGID","1000"),envVar("PUID","1000"),envVar("STEAMBETA",beta)}
+		containerPorts=[]any{port("game-udp",req.Port,"UDP"),port("game-tcp",req.Port,"TCP"),port("messaging",8888,"TCP")}
 		volumeMount["mountPath"]="/config"
 	case "factorio":
-		env=[]any{envVar("VERSION",req.Version)}
+		imageTag=req.Version
+		env=[]any{envVar("PORT",strconv.Itoa(req.Port)),envVar("RCON_PORT","27015")}
 		containerPorts=[]any{port("game",req.Port,"UDP"),port("rcon",27015,"TCP")}
 		volumeMount["mountPath"]="/factorio"
 	}
 	labels:=map[string]string{"app.kubernetes.io/managed-by":"homelab-monitor","homelab-monitor.io/game-server":id,"homelab-monitor.io/game":req.Game}
 	pvc:=map[string]any{"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":map[string]any{"name":id+"-data","namespace":gameNamespace,"labels":labels},"spec":map[string]any{"accessModes":[]string{"ReadWriteOnce"},"storageClassName":"longhorn","resources":map[string]any{"requests":map[string]string{"storage":strconv.Itoa(req.StorageGB)+"Gi"}}}}
-	dep:=map[string]any{"apiVersion":"apps/v1","kind":"Deployment","metadata":map[string]any{"name":id,"namespace":gameNamespace,"labels":labels},"spec":map[string]any{"replicas":0,"selector":map[string]any{"matchLabels":labels},"template":map[string]any{"metadata":map[string]any{"labels":labels},"spec":map[string]any{"containers":[]any{map[string]any{"name":req.Game,"image":image+":"+req.Version,"imagePullPolicy":"IfNotPresent","env":env,"ports":containerPorts,"resources":map[string]any{"requests":map[string]string{"cpu":"500m","memory":strconv.Itoa(req.RAMGB)+"Gi"},"limits":map[string]string{"memory":strconv.Itoa(req.RAMGB)+"Gi"}},"volumeMounts":[]any{volumeMount}}},"volumes":[]any{map[string]any{"name":"data","persistentVolumeClaim":map[string]any{"claimName":id+"-data"}}}}}}}
+	dep:=map[string]any{"apiVersion":"apps/v1","kind":"Deployment","metadata":map[string]any{"name":id,"namespace":gameNamespace,"labels":labels},"spec":map[string]any{"replicas":0,"selector":map[string]any{"matchLabels":labels},"template":map[string]any{"metadata":map[string]any{"labels":labels},"spec":map[string]any{"containers":[]any{map[string]any{"name":req.Game,"image":image+":"+imageTag,"imagePullPolicy":"IfNotPresent","env":env,"ports":containerPorts,"resources":map[string]any{"requests":map[string]string{"cpu":"500m","memory":strconv.Itoa(req.RAMGB)+"Gi"},"limits":map[string]string{"memory":strconv.Itoa(req.RAMGB)+"Gi"}},"volumeMounts":[]any{volumeMount}}},"volumes":[]any{map[string]any{"name":"data","persistentVolumeClaim":map[string]any{"claimName":id+"-data"}}}}}}}
 	if err=s.kube.CreateResource(ctx,"/api/v1/namespaces/"+gameNamespace+"/persistentvolumeclaims",pvc);err!=nil {writeJSON(w,502,map[string]string{"error":"Could not create Longhorn PVC: "+err.Error()});return}
 	if err=s.kube.CreateResource(ctx,"/apis/apps/v1/namespaces/"+gameNamespace+"/deployments",dep);err!=nil {_=s.kube.DeleteResource(ctx,"/api/v1/namespaces/"+gameNamespace+"/persistentvolumeclaims/"+id+"-data");writeJSON(w,502,map[string]string{"error":"Could not create Deployment: "+err.Error()});return}
 	svcPorts:=[]any{}
