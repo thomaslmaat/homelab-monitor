@@ -152,5 +152,3 @@ func (s *Server) deleteManagedGame(w http.ResponseWriter,r *http.Request) {
 
 func envVar(name,value string) map[string]any {return map[string]any{"name":name,"value":value}}
 func port(name string,n int,protocol string) map[string]any {return map[string]any{"name":name,"containerPort":n,"protocol":protocol}}
-
-var _ sync.Locker
