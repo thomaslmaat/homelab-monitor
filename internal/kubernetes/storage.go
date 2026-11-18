@@ -213,14 +213,14 @@ func (c *Client) Storage(ctx context.Context) StorageOverview {
 				Status struct {
 					State      string `json:"state"`
 					Robustness string `json:"robustness"`
-					ActualSize string `json:"actualSize"`
+					ActualSize int64  `json:"actualSize"`
 				} `json:"status"`
 			}
 			if json.Unmarshal(raw, &x) != nil {
 				continue
 			}
 			capacity, _ := strconv.ParseInt(strings.TrimSpace(x.Spec.Size), 10, 64)
-			actual, _ := strconv.ParseInt(strings.TrimSpace(x.Status.ActualSize), 10, 64)
+			actual := x.Status.ActualSize
 			volumeReplicas := replicasByVolume[x.Metadata.Name]
 			active := 0
 			for _, replica := range volumeReplicas {
