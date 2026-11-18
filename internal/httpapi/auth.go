@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -39,14 +40,8 @@ func secureEqual(a,b string) bool { return subtle.ConstantTimeCompare([]byte(a),
 
 func (s *Server) bootstrapAdmin() error {
 	salt,err:=randomBytes(16); if err!=nil{return err}
-	return s.store.EnsureDashboardAdmin(nilContext{},base64.RawStdEncoding.EncodeToString(salt),encodeHash("admin",salt))
+	return s.store.EnsureDashboardAdmin(context.Background(),base64.RawStdEncoding.EncodeToString(salt),encodeHash("admin",salt))
 }
-
-type nilContext struct{}
-func (nilContext) Deadline()(time.Time,bool){return time.Time{},false}
-func (nilContext) Done() <-chan struct{}{return nil}
-func (nilContext) Err() error{return nil}
-func (nilContext) Value(any) any{return nil}
 
 func (s *Server) authStatus(w http.ResponseWriter,r *http.Request) {
 	username,ok:=s.sessionUsername(r)
