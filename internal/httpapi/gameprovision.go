@@ -24,6 +24,7 @@ type managedGameServer struct {
 	StorageGB int `json:"storage_gb"`
 	Port int `json:"port"`
 	NodePort int `json:"node_port,omitempty"`
+	ExternalPorts []int `json:"external_ports,omitempty"`
 	State string `json:"state,omitempty"`
 	Ready int `json:"ready"`
 	Desired int `json:"desired"`
@@ -73,6 +74,8 @@ func (s *Server) managedGameInventory(w http.ResponseWriter,r *http.Request) {
 	for i:=range rows {
 		rows[i].State="not_found"
 		if cluster.Available { for _,d:=range cluster.Deployments { if d.Namespace==rows[i].Namespace && d.Name==rows[i].Workload { rows[i].Ready=d.Ready;rows[i].Desired=d.Desired;switch {case d.Desired==0:rows[i].State="stopped";case d.Ready>0:rows[i].State="running";default:rows[i].State="starting"};break } } }
+		var svc struct { Spec struct { Ports []struct { NodePort int `json:"nodePort"` } `json:"ports"` } `json:"spec"` }
+		if err:=s.kube.GetResource(ctx,"/api/v1/namespaces/"+gameNamespace+"/services/"+rows[i].ID,&svc);err==nil { for _,p:=range svc.Spec.Ports { if p.NodePort>0 {rows[i].ExternalPorts=append(rows[i].ExternalPorts,p.NodePort)} } }
 	}
 	writeJSON(w,200,map[string]any{"configured":true,"game_servers":rows,"cluster_available":cluster.Available})
 }
@@ -102,7 +105,7 @@ func (s *Server) createManagedGame(w http.ResponseWriter,r *http.Request) {
 	switch req.Game {
 	case "minecraft":
 		imageTag="java21"
-		env=[]any{envVar("EULA","TRUE"),envVar("TYPE","PAPER"),envVar("VERSION",req.Version),envVar("MEMORY",strconv.Itoa(req.RAMGB)+"G")}
+		env=[]any{envVar("EULA","TRUE"),envVar("TYPE","PAPER"),envVar("VERSION",req.Version),envVar("MEMORY",strconv.Itoa(max(1,req.RAMGB-1))+"G")}
 		containerPorts=[]any{port("game",req.Port,"TCP")}
 		volumeMount["mountPath"]="/data"
 	case "satisfactory":
@@ -184,7 +187,7 @@ func (s *Server) updateManagedGame(w http.ResponseWriter,r *http.Request) {
 	switch old.Game {
 	case "minecraft":
 		imageTag="java21"
-		env=[]any{envVar("EULA","TRUE"),envVar("TYPE","PAPER"),envVar("VERSION",req.Version),envVar("MEMORY",strconv.Itoa(req.RAMGB)+"G")}
+		env=[]any{envVar("EULA","TRUE"),envVar("TYPE","PAPER"),envVar("VERSION",req.Version),envVar("MEMORY",strconv.Itoa(max(1,req.RAMGB-1))+"G")}
 		ports=[]any{port("game",req.Port,"TCP")}
 	case "satisfactory":
 		beta:="false";if req.Version=="experimental"{beta="true"}
