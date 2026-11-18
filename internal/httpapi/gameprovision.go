@@ -152,3 +152,63 @@ func (s *Server) deleteManagedGame(w http.ResponseWriter,r *http.Request) {
 
 func envVar(name,value string) map[string]any {return map[string]any{"name":name,"value":value}}
 func port(name string,n int,protocol string) map[string]any {return map[string]any{"name":name,"containerPort":n,"protocol":protocol}}
+
+type updateGameRequest struct {
+	Version string `json:"version"`
+	RAMGB int `json:"ram_gb"`
+	StorageGB int `json:"storage_gb"`
+	Port int `json:"port"`
+}
+
+func (s *Server) updateManagedGame(w http.ResponseWriter,r *http.Request) {
+	id:=r.PathValue("id")
+	r.Body=http.MaxBytesReader(w,r.Body,8192);defer r.Body.Close()
+	var req updateGameRequest
+	if err:=json.NewDecoder(r.Body).Decode(&req);err!=nil {writeJSON(w,400,map[string]string{"error":"Invalid request"});return}
+	ctx,cancel:=context.WithTimeout(r.Context(),25*time.Second);defer cancel()
+	if s.kube==nil {writeJSON(w,503,map[string]string{"error":"Kubernetes client unavailable"});return}
+	s.gameMu.Lock();defer s.gameMu.Unlock()
+	rows,err:=s.readManagedGames(ctx);if err!=nil {writeJSON(w,502,map[string]string{"error":"Could not read registry: "+err.Error()});return}
+	idx:=-1
+	for i:=range rows {if rows[i].ID==id {idx=i;break}}
+	if idx<0 {writeJSON(w,404,map[string]string{"error":"Game server not found"});return}
+	old:=rows[idx]
+	if req.Port==0 {req.Port=old.Port}
+	if req.StorageGB<old.StorageGB {writeJSON(w,400,map[string]string{"error":"Opslag kan alleen worden vergroot; verkleinen kan data beschadigen"});return}
+	if _,err=gameservers.ValidateCreate(gameservers.CreateRequest{Name:old.Name,Game:old.Game,Version:req.Version,RAMGB:req.RAMGB,StorageGB:req.StorageGB,Port:req.Port});err!=nil {writeJSON(w,400,map[string]string{"error":err.Error()});return}
+	template:=gameservers.Template{}
+	for _,x:=range gameservers.Catalog(){if x.Game==old.Game {template=x;break}}
+	imageTag:="latest"
+	env:=[]any{}
+	ports:=[]any{}
+	switch old.Game {
+	case "minecraft":
+		imageTag="java21"
+		env=[]any{envVar("EULA","TRUE"),envVar("TYPE","PAPER"),envVar("VERSION",req.Version),envVar("MEMORY",strconv.Itoa(req.RAMGB)+"G")}
+		ports=[]any{port("game",req.Port,"TCP")}
+	case "satisfactory":
+		beta:="false";if req.Version=="experimental"{beta="true"}
+		env=[]any{envVar("MAXPLAYERS","4"),envVar("SERVERGAMEPORT",strconv.Itoa(req.Port)),envVar("SERVERMESSAGINGPORT","8888"),envVar("PGID","1000"),envVar("PUID","1000"),envVar("STEAMBETA",beta)}
+		ports=[]any{port("game-udp",req.Port,"UDP"),port("game-tcp",req.Port,"TCP"),port("messaging",8888,"TCP")}
+	case "factorio":
+		imageTag=req.Version
+		env=[]any{envVar("PORT",strconv.Itoa(req.Port)),envVar("RCON_PORT","27015")}
+		ports=[]any{port("game",req.Port,"UDP"),port("rcon",27015,"TCP")}
+	}
+	deploymentPath:="/apis/apps/v1/namespaces/"+gameNamespace+"/deployments/"+id
+	patch:=map[string]any{"spec":map[string]any{"template":map[string]any{"spec":map[string]any{"containers":[]any{map[string]any{"name":old.Game,"image":template.Image+":"+imageTag,"env":env,"ports":ports,"resources":map[string]any{"requests":map[string]string{"cpu":"500m","memory":strconv.Itoa(req.RAMGB)+"Gi"},"limits":map[string]string{"memory":strconv.Itoa(req.RAMGB)+"Gi"}}}}}}}}
+	if err=s.kube.PatchResource(ctx,deploymentPath,patch);err!=nil {writeJSON(w,502,map[string]string{"error":"Could not update Deployment: "+err.Error()});return}
+	if req.StorageGB>old.StorageGB {
+		pvcPath:="/api/v1/namespaces/"+gameNamespace+"/persistentvolumeclaims/"+id+"-data"
+		pvcPatch:=map[string]any{"spec":map[string]any{"resources":map[string]any{"requests":map[string]string{"storage":strconv.Itoa(req.StorageGB)+"Gi"}}}}
+		if err=s.kube.PatchResource(ctx,pvcPath,pvcPatch);err!=nil {writeJSON(w,502,map[string]string{"error":"Deployment updated but Longhorn volume resize failed: "+err.Error()});return}
+	}
+	servicePorts:=[]any{}
+	for _,raw:=range ports {p:=raw.(map[string]any);servicePorts=append(servicePorts,map[string]any{"name":p["name"],"port":p["containerPort"],"targetPort":p["containerPort"],"protocol":p["protocol"]})}
+	servicePath:="/api/v1/namespaces/"+gameNamespace+"/services/"+id
+	if err=s.kube.PatchResource(ctx,servicePath,map[string]any{"spec":map[string]any{"ports":servicePorts}});err!=nil {writeJSON(w,502,map[string]string{"error":"Deployment updated but Service port update failed: "+err.Error()});return}
+	rows[idx].Version=req.Version;rows[idx].RAMGB=req.RAMGB;rows[idx].StorageGB=req.StorageGB;rows[idx].Port=req.Port
+	if err=s.saveManagedGames(ctx,rows);err!=nil {writeJSON(w,502,map[string]string{"error":"Server updated but registry save failed: "+err.Error()});return}
+	log.Printf("game server configured: user=%q id=%q game=%q",sessionUser(r),id,old.Game)
+	writeJSON(w,200,map[string]any{"status":"updated","game_server":rows[idx]})
+}
