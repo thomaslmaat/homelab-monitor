@@ -39,7 +39,8 @@ func New(store *storage.Store, kube *kubernetes.Client) *Server {
 		if s.kube == nil { return integrations.Health{Status:"not_configured",Message:"Kubernetes client is unavailable"} }
 		v := s.kube.Storage(ctx)
 		if !v.Available { return integrations.Health{Status:"degraded",Message:"Storage API unavailable; check PVC/PV and Longhorn read permissions"} }
-		return integrations.Health{Status:"connected",Message:"Storage resources are readable"}
+		if v.Error != "" { return integrations.Health{Status:"degraded",Message:v.Error} }
+		return integrations.Health{Status:"connected",Message:"PVC, PV and Longhorn volume resources are readable"}
 	}})
 	_ = s.registry.Register(integrations.FuncAdapter{AdapterID:"homelab-agents", DisplayName:"Homelab Agents", AdapterKind:"monitoring", AdapterVersion:"built-in", Supported:[]integrations.Capability{{ID:"metrics.read",Description:"Read host metrics and agent heartbeat"}}, HealthCheck:func(ctx context.Context) integrations.Health {
 		hosts, err := s.store.Latest(ctx)
