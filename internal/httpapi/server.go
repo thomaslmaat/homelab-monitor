@@ -241,8 +241,8 @@ func (s *Server) gameServerAction(w http.ResponseWriter, r *http.Request) {
 		actionErr = s.kube.RestartDeployment(ctx, target.Namespace, target.Workload)
 	default: writeJSON(w,400,map[string]string{"error":"Action must be start, stop or restart"}); return
 	}
-	if actionErr != nil { log.Printf("game server action failed: user=%q id=%q action=%q error=%v",s.sessionUser(r),id,payload.Action,actionErr); writeJSON(w,502,map[string]string{"error":"Kubernetes could not apply the action: "+actionErr.Error()}); return }
-	log.Printf("game server action accepted: user=%q id=%q game=%q action=%q",sessionUser(r),id,target.Game,payload.Action)
+	if actionErr != nil { log.Printf("game server action failed: user=%q id=%q action=%q error=%v",s.s.sessionUser(r),id,payload.Action,actionErr); writeJSON(w,502,map[string]string{"error":"Kubernetes could not apply the action: "+actionErr.Error()}); return }
+	log.Printf("game server action accepted: user=%q id=%q game=%q action=%q",s.sessionUser(r),id,target.Game,payload.Action)
 	writeJSON(w,202,map[string]string{"status":"accepted","action":payload.Action,"id":id})
 }
 
