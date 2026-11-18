@@ -30,8 +30,8 @@ type Template struct {
 }
 
 var templates = map[string]Template{
-	"minecraft": {Game:"minecraft",DisplayName:"Minecraft Java (Paper)",DefaultPort:25565,Ports:[]int{25565},StorageGB:10,MinRAMGB:2,Image:"itzg/minecraft-server:java21",VersionHint:"Minecraft release (Paper)"},
-	"satisfactory": {Game:"satisfactory",DisplayName:"Satisfactory",DefaultPort:7777,Ports:[]int{7777,7777,8888},StorageGB:20,MinRAMGB:8,Image:"wolveix/satisfactory-server:latest",VersionHint:"stable of experimental"},
+	"minecraft": {Game:"minecraft",DisplayName:"Minecraft Java (Paper)",DefaultPort:25565,Ports:[]int{25565},StorageGB:10,MinRAMGB:2,Image:"itzg/minecraft-server",VersionHint:"Minecraft release (Paper)"},
+	"satisfactory": {Game:"satisfactory",DisplayName:"Satisfactory",DefaultPort:7777,Ports:[]int{7777,7777,8888},StorageGB:20,MinRAMGB:8,Image:"wolveix/satisfactory-server",VersionHint:"stable of experimental"},
 	"factorio": {Game:"factorio",DisplayName:"Factorio",DefaultPort:34197,Ports:[]int{34197,27015},StorageGB:10,MinRAMGB:2,Image:"factoriotools/factorio",VersionHint:"stable of stable-x.y.z"},
 }
 
