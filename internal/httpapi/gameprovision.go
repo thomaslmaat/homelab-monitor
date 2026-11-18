@@ -199,8 +199,13 @@ func (s *Server) updateManagedGame(w http.ResponseWriter,r *http.Request) {
 		ports=[]any{port("game",req.Port,"UDP"),port("rcon",27015,"TCP")}
 	}
 	deploymentPath:="/apis/apps/v1/namespaces/"+gameNamespace+"/deployments/"+id
-	patch:=map[string]any{"spec":map[string]any{"template":map[string]any{"spec":map[string]any{"containers":[]any{map[string]any{"name":old.Game,"image":template.Image+":"+imageTag,"env":env,"ports":ports,"resources":map[string]any{"requests":map[string]string{"cpu":"500m","memory":strconv.Itoa(req.RAMGB)+"Gi"},"limits":map[string]string{"memory":strconv.Itoa(req.RAMGB)+"Gi"}}}}}}}}
-	if err=s.kube.PatchResource(ctx,deploymentPath,patch);err!=nil {writeJSON(w,502,map[string]string{"error":"Could not update Deployment: "+err.Error()});return}
+	var deployment map[string]any
+	if err=s.kube.GetResource(ctx,deploymentPath,&deployment);err!=nil {writeJSON(w,502,map[string]string{"error":"Could not read Deployment: "+err.Error()});return}
+	depSpec,_:=deployment["spec"].(map[string]any);templateSpec,_:=depSpec["template"].(map[string]any);podSpec,_:=templateSpec["spec"].(map[string]any);containers,_:=podSpec["containers"].([]any)
+	updatedContainer:=false
+	for _,raw:=range containers {container,ok:=raw.(map[string]any);if !ok || container["name"]!=old.Game {continue};container["image"]=template.Image+":"+imageTag;container["env"]=env;container["ports"]=ports;container["resources"]=map[string]any{"requests":map[string]string{"cpu":"500m","memory":strconv.Itoa(req.RAMGB)+"Gi"},"limits":map[string]string{"memory":strconv.Itoa(req.RAMGB)+"Gi"}};updatedContainer=true}
+	if !updatedContainer {writeJSON(w,502,map[string]string{"error":"Game container not found in Deployment"});return}
+	if err=s.kube.PutResource(ctx,deploymentPath,deployment);err!=nil {writeJSON(w,502,map[string]string{"error":"Could not update Deployment: "+err.Error()});return}
 	if req.StorageGB>old.StorageGB {
 		pvcPath:="/api/v1/namespaces/"+gameNamespace+"/persistentvolumeclaims/"+id+"-data"
 		pvcPatch:=map[string]any{"spec":map[string]any{"resources":map[string]any{"requests":map[string]string{"storage":strconv.Itoa(req.StorageGB)+"Gi"}}}}
