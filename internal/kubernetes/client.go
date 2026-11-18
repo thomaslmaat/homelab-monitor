@@ -225,6 +225,23 @@ func (c *Client) patch(ctx context.Context, path string, value any) error {
 	return nil
 }
 
+// CreateResource creates a Kubernetes API object from a validated, server-generated manifest.
+func (c *Client) CreateResource(ctx context.Context, path string, value any) error {
+	body, err := json.Marshal(value)
+	if err != nil { return err }
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
+	if err != nil { return err }
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil { return err }
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("Kubernetes API returned %s creating resource", resp.Status)
+	}
+	return nil
+}
+
 func (c *Client) get(ctx context.Context, path string, dst any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
