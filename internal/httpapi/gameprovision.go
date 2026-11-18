@@ -226,3 +226,20 @@ func (s *Server) updateManagedGame(w http.ResponseWriter,r *http.Request) {
 	log.Printf("game server configured: user=%q id=%q game=%q",s.sessionUser(r),id,old.Game)
 	writeJSON(w,200,map[string]any{"status":"updated","game_server":rows[idx]})
 }
+
+func (s *Server) gameServerLogs(w http.ResponseWriter,r *http.Request) {
+	id:=r.PathValue("id")
+	ctx,cancel:=context.WithTimeout(r.Context(),8*time.Second);defer cancel()
+	if s.kube==nil {writeJSON(w,503,map[string]string{"error":"Kubernetes client unavailable"});return}
+	rows,err:=s.readManagedGames(ctx);if err!=nil {writeJSON(w,502,map[string]string{"error":"Could not read game server registry"});return}
+	registered:=false
+	for _,row:=range rows {if row.ID==id {registered=true;break}}
+	if !registered {writeJSON(w,404,map[string]string{"error":"Game server not found"});return}
+	selector:=url.QueryEscape("homelab-monitor.io/game-server="+id)
+	var pods struct { Items []struct { Metadata struct { Name string `json:"name"` } `json:"metadata"` } `json:"items"` }
+	if err=s.kube.GetResource(ctx,"/api/v1/namespaces/"+gameNamespace+"/pods?labelSelector="+selector,&pods);err!=nil {writeJSON(w,502,map[string]string{"error":"Could not find game server pod: "+err.Error()});return}
+	if len(pods.Items)==0 {writeJSON(w,200,map[string]string{"logs":"Geen actieve pod. Start de server om logs te bekijken."});return}
+	logs,err:=s.kube.GetText(ctx,"/api/v1/namespaces/"+gameNamespace+"/pods/"+url.PathEscape(pods.Items[0].Metadata.Name)+"/log?tailLines=200")
+	if err!=nil {writeJSON(w,502,map[string]string{"error":"Could not read pod logs: "+err.Error()});return}
+	writeJSON(w,200,map[string]string{"logs":logs})
+}
