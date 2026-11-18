@@ -24,6 +24,7 @@ type Server struct {
 	kube  *kubernetes.Client
 	registry *integrations.Registry
 	gameServers []gameservers.Config
+	gameMu sync.Mutex
 	authMu sync.Mutex
 	sessions map[string]authSession
 	loginAttempts map[string]loginAttempt
@@ -72,7 +73,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/overview", s.overview)
 	mux.HandleFunc("GET /api/v1/storage", s.storage)
 	mux.HandleFunc("GET /api/v1/integrations", s.integrations)
-	mux.HandleFunc("GET /api/v1/game-servers", s.gameServersInventory)
+	mux.HandleFunc("GET /api/v1/game-servers", s.managedGameInventory)
+	mux.HandleFunc("GET /api/v1/game-servers/catalog", s.gameCatalog)
+	mux.HandleFunc("POST /api/v1/game-servers", s.createManagedGame)
+	mux.HandleFunc("DELETE /api/v1/game-servers/{id}", s.deleteManagedGame)
 	mux.HandleFunc("POST /api/v1/game-servers/{id}/actions", s.gameServerAction)
 	mux.Handle("/", dashboard.Handler())
 	return securityHeaders(s.authMiddleware(mux))
