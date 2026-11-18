@@ -101,6 +101,7 @@ func (s *Server) createManagedGame(w http.ResponseWriter,r *http.Request) {
 	volumeMount:=map[string]any{"name":"data","mountPath":"/data"}
 	switch req.Game {
 	case "minecraft":
+		imageTag="java21"
 		env=[]any{envVar("EULA","TRUE"),envVar("TYPE","PAPER"),envVar("VERSION",req.Version),envVar("MEMORY",strconv.Itoa(req.RAMGB)+"G")}
 		containerPorts=[]any{port("game",req.Port,"TCP")}
 		volumeMount["mountPath"]="/data"
