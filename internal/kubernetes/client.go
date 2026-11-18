@@ -2,12 +2,14 @@ package kubernetes
 
 import (
 	"context"
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -191,6 +193,38 @@ func (c *Client) Overview(ctx context.Context) Overview {
 	out.Available = true
 	return out
 }
+// ScaleDeployment changes only the replica count of an explicitly configured game Deployment.
+func (c *Client) ScaleDeployment(ctx context.Context, namespace, name string, replicas int) error {
+	if replicas < 0 || replicas > 1 {
+		return fmt.Errorf("game server replicas must be 0 or 1")
+	}
+	path := "/apis/apps/v1/namespaces/" + url.PathEscape(namespace) + "/deployments/" + url.PathEscape(name) + "/scale"
+	return c.patch(ctx, path, map[string]any{"spec": map[string]int{"replicas": replicas}})
+}
+
+// RestartDeployment requests a rolling restart without deleting pods or persistent data.
+func (c *Client) RestartDeployment(ctx context.Context, namespace, name string) error {
+	path := "/apis/apps/v1/namespaces/" + url.PathEscape(namespace) + "/deployments/" + url.PathEscape(name)
+	patch := map[string]any{"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{"annotations": map[string]string{"homelab-monitor.io/restarted-at": time.Now().UTC().Format(time.RFC3339Nano)}}}}}
+	return c.patch(ctx, path, patch)
+}
+
+func (c *Client) patch(ctx context.Context, path string, value any) error {
+	body, err := json.Marshal(value)
+	if err != nil { return err }
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+path, bytes.NewReader(body))
+	if err != nil { return err }
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/strategic-merge-patch+json")
+	resp, err := c.http.Do(req)
+	if err != nil { return err }
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("Kubernetes API returned %s for %s", resp.Status, path)
+	}
+	return nil
+}
+
 func (c *Client) get(ctx context.Context, path string, dst any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
