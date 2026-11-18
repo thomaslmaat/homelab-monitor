@@ -6,17 +6,8 @@ import (
 	"strings"
 )
 
-var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-var versionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}package gameservers
-
-import (
-	"fmt"
-	"regexp"
-	"strings"
-)
-
-var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-var versionPattern = regexp.MustCompile()
+var dnsLabel = regexp.MustCompile("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+var versionPattern = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 
 type CreateRequest struct {
 	Name string `json:"name"`
@@ -61,6 +52,5 @@ func ValidateCreate(r CreateRequest) (string,error) {
 	if r.RAMGB<t.MinRAMGB || r.RAMGB>64 { return "",fmt.Errorf("RAM moet tussen %d en 64 GB liggen",t.MinRAMGB) }
 	if r.StorageGB<1 || r.StorageGB>500 { return "",fmt.Errorf("opslag moet tussen 1 en 500 GB liggen") }
 	if r.Port<1024 || r.Port>65535 { return "",fmt.Errorf("poort moet tussen 1024 en 65535 liggen") }
-	_ = t
 	return r.Name,nil
 }
