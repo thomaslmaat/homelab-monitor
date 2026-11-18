@@ -1,0 +1,18 @@
+[
+  {
+    "id": "minecraft-main",
+    "name": "Minecraft",
+    "game": "minecraft",
+    "namespace": "games",
+    "workload": "minecraft",
+    "workload_type": "deployment"
+  },
+  {
+    "id": "satisfactory-main",
+    "name": "Satisfactory",
+    "game": "satisfactory",
+    "namespace": "satisfactory",
+    "workload": "satisfactory-server",
+    "workload_type": "deployment"
+  }
+]

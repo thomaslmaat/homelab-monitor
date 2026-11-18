@@ -25,3 +25,5 @@ jobs:
         run: CGO_ENABLED=0 go build ./cmd/core
       - name: Build Agent
         run: CGO_ENABLED=0 go build ./cmd/agent
+      - name: Check dashboard JavaScript syntax
+        run: node --check internal/dashboard/assets/app.js
