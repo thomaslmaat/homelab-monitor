@@ -33,7 +33,7 @@ type countingAdapter struct {
 }
 
 func (a countingAdapter) Check(context.Context) Health {
-	*a.calls++
+	*a.calls = *a.calls + 1
 	return Health{Status: "connected"}
 }
 
