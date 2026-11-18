@@ -14,14 +14,15 @@ func TestCatalogContainsSupportedGames(t *testing.T) {
 
 func TestValidateCreateAllowsMoreThanEightGB(t *testing.T) {
 	for _,ram:=range []int{10,12,16,20,24} {
-		_,err:=ValidateCreate(CreateRequest{Name:"minecraft-1",Game:"minecraft",Version:"1.21.11",RAMGB:ram,StorageGB:20,Port:25565})
+		_,err:=ValidateCreate(CreateRequest{Name:"minecraft-1",Game:"minecraft",Version:"1.21.11",RAMGB:ram,StorageGB:20,Port:25565,AcceptEULA:true})
 		if err!=nil { t.Errorf("%d GB rejected: %v",ram,err) }
 	}
 }
 
 func TestValidateCreateRejectsInvalidValues(t *testing.T) {
 	cases:=[]CreateRequest{
-		{Name:"Bad Name",Game:"minecraft",Version:"1.21",RAMGB:4,StorageGB:10,Port:25565},
+		{Name:"minecraft-no-eula",Game:"minecraft",Version:"1.21.11",RAMGB:4,StorageGB:10,Port:25565},
+		{Name:"Bad Name",Game:"minecraft",Version:"1.21",RAMGB:4,StorageGB:10,Port:25565,AcceptEULA:true},
 		{Name:"factorio",Game:"factorio",Version:"latest;rm",RAMGB:4,StorageGB:10,Port:34197},
 		{Name:"satisfactory",Game:"satisfactory",Version:"1.0",RAMGB:4,StorageGB:10,Port:7777},
 		{Name:"minecraft",Game:"unknown",Version:"1.21",RAMGB:4,StorageGB:10,Port:25565},
