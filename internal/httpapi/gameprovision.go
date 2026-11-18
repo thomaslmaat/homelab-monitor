@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/thomaslmaat/homelab-monitor/internal/gameservers"
@@ -25,6 +24,9 @@ type managedGameServer struct {
 	StorageGB int `json:"storage_gb"`
 	Port int `json:"port"`
 	NodePort int `json:"node_port,omitempty"`
+	State string `json:"state,omitempty"`
+	Ready int `json:"ready"`
+	Desired int `json:"desired"`
 }
 
 type gameRegistry struct { Data map[string]string `json:"data"` }
@@ -55,8 +57,8 @@ func (s *Server) saveManagedGames(ctx context.Context, rows []managedGameServer)
 
 func (s *Server) ensureGameNamespace(ctx context.Context) error {
 	var ns map[string]any
-	if err:=s.kube.GetResource(ctx,"/api/v1/namespaces/"+gameNamespace,&ns); err==nil{return nil}
-	return s.kube.CreateResource(ctx,"/api/v1/namespaces",map[string]any{"apiVersion":"v1","kind":"Namespace","metadata":map[string]any{"name":gameNamespace,"labels":map[string]string{"app.kubernetes.io/managed-by":"homelab-monitor"}}})
+	if err:=s.kube.GetResource(ctx,"/api/v1/namespaces/"+gameNamespace,&ns); err!=nil { return fmt.Errorf("namespace %q is not ready; sync the Homelab Monitor ArgoCD application first: %w",gameNamespace,err) }
+	return nil
 }
 
 func (s *Server) managedGameInventory(w http.ResponseWriter,r *http.Request) {
@@ -64,11 +66,15 @@ func (s *Server) managedGameInventory(w http.ResponseWriter,r *http.Request) {
 	if s.kube==nil {writeJSON(w,503,map[string]string{"error":"Kubernetes client unavailable"});return}
 	rows,err:=s.readManagedGames(ctx)
 	if err!=nil {
-		// A not-yet-created registry is an empty inventory; all other failures are surfaced.
 		if !strings.Contains(err.Error(),"404") {writeJSON(w,502,map[string]string{"error":"Could not read game server registry: "+err.Error()});return}
 		rows=[]managedGameServer{}
 	}
-	writeJSON(w,200,map[string]any{"configured":true,"game_servers":rows})
+	cluster:=s.kube.Overview(ctx)
+	for i:=range rows {
+		rows[i].State="not_found"
+		if cluster.Available { for _,d:=range cluster.Deployments { if d.Namespace==rows[i].Namespace && d.Name==rows[i].Workload { rows[i].Ready=d.Ready;rows[i].Desired=d.Desired;switch {case d.Desired==0:rows[i].State="stopped";case d.Ready>0:rows[i].State="running";default:rows[i].State="starting"};break } } }
+	}
+	writeJSON(w,200,map[string]any{"configured":true,"game_servers":rows,"cluster_available":cluster.Available})
 }
 
 func (s *Server) createManagedGame(w http.ResponseWriter,r *http.Request) {
