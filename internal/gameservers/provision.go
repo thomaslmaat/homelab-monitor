@@ -16,6 +16,7 @@ type CreateRequest struct {
 	RAMGB int `json:"ram_gb"`
 	StorageGB int `json:"storage_gb"`
 	Port int `json:"port"`
+	AcceptEULA bool `json:"accept_eula"`
 }
 
 type Template struct {
@@ -46,6 +47,7 @@ func ValidateCreate(r CreateRequest) (string,error) {
 	if !dnsLabel.MatchString(r.Name) || len(r.Name)>40 { return "",fmt.Errorf("naam moet een Kubernetes-naam zijn (maximaal 40 tekens)") }
 	t,ok:=templates[r.Game]; if !ok { return "",fmt.Errorf("game moet minecraft, satisfactory of factorio zijn") }
 	if !versionPattern.MatchString(r.Version) { return "",fmt.Errorf("ongeldige of ontbrekende gameversie") }
+	if r.Game=="minecraft" && !r.AcceptEULA { return "",fmt.Errorf("bevestig eerst de Minecraft EULA") }
 	if r.Game=="satisfactory" && r.Version!="stable" && r.Version!="experimental" { return "",fmt.Errorf("Satisfactory ondersteunt hier stable of experimental; exacte Steam-builds worden door de image bijgewerkt") }
 	if r.RAMGB<t.MinRAMGB || r.RAMGB>64 { return "",fmt.Errorf("RAM moet tussen %d en 64 GB liggen",t.MinRAMGB) }
 	if r.StorageGB<1 || r.StorageGB>500 { return "",fmt.Errorf("opslag moet tussen 1 en 500 GB liggen") }
