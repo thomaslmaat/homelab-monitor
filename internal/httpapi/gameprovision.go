@@ -131,7 +131,7 @@ func (s *Server) createManagedGame(w http.ResponseWriter,r *http.Request) {
 	row:=managedGameServer{Config:gameservers.Config{ID:id,Name:req.Name,Game:req.Game,Namespace:gameNamespace,Workload:id,WorkloadType:"deployment"},Version:req.Version,RAMGB:req.RAMGB,StorageGB:req.StorageGB,Port:req.Port}
 	rows=append(rows,row)
 	if err=s.saveManagedGames(ctx,rows);err!=nil {log.Printf("game registry save failed: %v",err);writeJSON(w,502,map[string]string{"error":"Resources created but registry could not be saved: "+err.Error()});return}
-	log.Printf("game server created: user=%q id=%q game=%q",sessionUser(r),id,req.Game)
+	log.Printf("game server created: user=%q id=%q game=%q",s.sessionUser(r),id,req.Game)
 	writeJSON(w,201,map[string]any{"game_server":row,"status":"created"})
 }
 
@@ -149,7 +149,7 @@ func (s *Server) deleteManagedGame(w http.ResponseWriter,r *http.Request) {
 	if !keepData {if err=s.kube.DeleteResource(ctx,"/api/v1/namespaces/"+gameNamespace+"/persistentvolumeclaims/"+url.PathEscape(id)+"-data");err!=nil {writeJSON(w,502,map[string]string{"error":"Deployment deleted but PVC removal failed: "+err.Error()});return}}
 	rows=append(rows[:index],rows[index+1:]...)
 	if err=s.saveManagedGames(ctx,rows);err!=nil {writeJSON(w,502,map[string]string{"error":"Server removed but registry update failed: "+err.Error()});return}
-	log.Printf("game server deleted: user=%q id=%q keep_data=%t",sessionUser(r),id,keepData)
+	log.Printf("game server deleted: user=%q id=%q keep_data=%t",s.sessionUser(r),id,keepData)
 	writeJSON(w,200,map[string]any{"status":"deleted","data_preserved":keepData})
 }
 
@@ -223,6 +223,6 @@ func (s *Server) updateManagedGame(w http.ResponseWriter,r *http.Request) {
 	if err=s.kube.PutResource(ctx,servicePath,service);err!=nil {writeJSON(w,502,map[string]string{"error":"Deployment updated but Service port update failed: "+err.Error()});return}
 	rows[idx].Version=req.Version;rows[idx].RAMGB=req.RAMGB;rows[idx].StorageGB=req.StorageGB;rows[idx].Port=req.Port
 	if err=s.saveManagedGames(ctx,rows);err!=nil {writeJSON(w,502,map[string]string{"error":"Server updated but registry save failed: "+err.Error()});return}
-	log.Printf("game server configured: user=%q id=%q game=%q",sessionUser(r),id,old.Game)
+	log.Printf("game server configured: user=%q id=%q game=%q",s.sessionUser(r),id,old.Game)
 	writeJSON(w,200,map[string]any{"status":"updated","game_server":rows[idx]})
 }
