@@ -6,7 +6,7 @@ Homelab Monitor is an open-source, Kubernetes-native monitoring application for 
 
 - **Core**: one Kubernetes Deployment, a ClusterIP Service, read-only Kubernetes API access and a Longhorn-backed SQLite PVC.
 - **Agent**: a DaemonSet. Kubernetes schedules one Agent on every Linux node, including control-plane nodes with scheduling taints. A newly joined Linux node is picked up automatically by the DaemonSet.
-- **Dashboard**: served by the Core at `/`; polls `/api/v1/overview` every 10 seconds.
+- **Dashboard**: served by the Core at `/`; requires a user login and polls the protected API for live data.
 - **Data flow**: Agent -> Core HTTP ingest API -> SQLite. Core -> Kubernetes API -> cluster inventory.
 
 The Core stays at one replica in v0.1 because SQLite is a single-writer embedded database. The Agent tier scales with the number of Linux nodes. The Core can be made highly available in a later release by moving storage to a multi-writer-capable backend and separating ingestion from query/API workloads.
@@ -67,7 +67,7 @@ docker build --build-arg COMPONENT=agent -t homelab-monitor-agent:dev .
 - `GET /api/v1/history?host=NODE_NAME`
 - `POST /api/v1/metrics` (Agent ingestion)
 
-The overview read endpoints are read-only. Keep the dashboard behind a trusted ingress/VPN or add ingress authentication before exposing it publicly. Do not expose the Core directly to the public internet.
+Dashboard API endpoints require an authenticated session. The first startup creates the default account `admin` / `admin`; the first login is blocked from dashboard use until the password is changed to one of at least 12 characters. Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes in the Core SQLite database, never as plaintext. Login sessions use HttpOnly, SameSite=Strict cookies and expire after 12 hours. The metrics ingest endpoint remains separate for in-cluster Agents. Keep the Core behind a trusted ingress/VPN and use HTTPS when accessing it outside localhost; do not expose the Core directly to the public internet.
 
 ## Customizable dashboard (v0.3)
 
@@ -92,7 +92,7 @@ Only integrations that have a working API connector and the required RBAC/creden
 - Linux nodes only; Windows nodes are ignored by the DaemonSet node selector.
 - CPU temperature depends on available `/sys/class/thermal` sensors and may be absent on some hardware.
 - Container CPU/memory usage is not yet collected; v0.1 reports pod state and host-level resource usage. Kubelet/cAdvisor stats integration is planned.
-- Longhorn volume/replica health, alerts, cross-browser dashboard sync, a user/account system, additional external-service connectors and configurable retention are planned. The current Core prunes metric history older than seven days.
+- Longhorn volume/replica health, alerts, cross-browser dashboard sync, additional external-service connectors and configurable retention are planned. The current Core prunes metric history older than seven days.
 - SQLite is single-writer and Core runs one replica. Agent pods are distributed and automatically scale with Linux node count.
 
 ## License
