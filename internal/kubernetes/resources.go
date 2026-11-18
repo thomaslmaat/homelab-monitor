@@ -43,3 +43,7 @@ func (c *Client) DeleteResource(ctx context.Context, path string) error {
 func ResourcePath(namespace, resource, name string) string {
 	return "/api/v1/namespaces/" + url.PathEscape(namespace) + "/" + resource + "/" + url.PathEscape(name)
 }
+
+func (c *Client) PatchResource(ctx context.Context, path string, value any) error {
+	return c.patch(ctx, path, value)
+}
