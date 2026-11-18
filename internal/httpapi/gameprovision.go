@@ -206,7 +206,13 @@ func (s *Server) updateManagedGame(w http.ResponseWriter,r *http.Request) {
 	servicePorts:=[]any{}
 	for _,raw:=range ports {p:=raw.(map[string]any);servicePorts=append(servicePorts,map[string]any{"name":p["name"],"port":p["containerPort"],"targetPort":p["containerPort"],"protocol":p["protocol"]})}
 	servicePath:="/api/v1/namespaces/"+gameNamespace+"/services/"+id
-	if err=s.kube.PatchResource(ctx,servicePath,map[string]any{"spec":map[string]any{"ports":servicePorts}});err!=nil {writeJSON(w,502,map[string]string{"error":"Deployment updated but Service port update failed: "+err.Error()});return}
+	var service map[string]any
+	if err=s.kube.GetResource(ctx,servicePath,&service);err!=nil {writeJSON(w,502,map[string]string{"error":"Deployment updated but Service could not be read: "+err.Error()});return}
+	spec,ok:=service["spec"].(map[string]any);if !ok {writeJSON(w,502,map[string]string{"error":"Service has an invalid spec"});return}
+	oldPorts,_:=spec["ports"].([]any)
+	for _,np:=range servicePorts {next:=np.(map[string]any);for _,op:=range oldPorts {previous,ok:=op.(map[string]any);if ok && previous["name"]==next["name"] {if nodePort,exists:=previous["nodePort"];exists {next["nodePort"]=nodePort}}}}
+	spec["ports"]=servicePorts
+	if err=s.kube.PutResource(ctx,servicePath,service);err!=nil {writeJSON(w,502,map[string]string{"error":"Deployment updated but Service port update failed: "+err.Error()});return}
 	rows[idx].Version=req.Version;rows[idx].RAMGB=req.RAMGB;rows[idx].StorageGB=req.StorageGB;rows[idx].Port=req.Port
 	if err=s.saveManagedGames(ctx,rows);err!=nil {writeJSON(w,502,map[string]string{"error":"Server updated but registry save failed: "+err.Error()});return}
 	log.Printf("game server configured: user=%q id=%q game=%q",sessionUser(r),id,old.Game)
