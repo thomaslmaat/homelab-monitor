@@ -76,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/game-servers", s.managedGameInventory)
 	mux.HandleFunc("GET /api/v1/game-servers/catalog", s.gameCatalog)
 	mux.HandleFunc("POST /api/v1/game-servers", s.createManagedGame)
+	mux.HandleFunc("PUT /api/v1/game-servers/{id}", s.updateManagedGame)
 	mux.HandleFunc("DELETE /api/v1/game-servers/{id}", s.deleteManagedGame)
 	mux.HandleFunc("POST /api/v1/game-servers/{id}/actions", s.gameServerAction)
 	mux.Handle("/", dashboard.Handler())
