@@ -44,6 +44,12 @@ func (s *Server) readManagedGames(ctx context.Context) ([]managedGameServer, err
 	if strings.TrimSpace(raw)=="" { return []managedGameServer{},nil }
 	var rows []managedGameServer
 	if err=json.Unmarshal([]byte(raw),&rows); err!=nil { return nil,fmt.Errorf("game registry is invalid: %w",err) }
+	// Normalize older registry entries so every API response and action has a stable ID.
+	for i:=range rows {
+		if strings.TrimSpace(rows[i].ID)=="" { rows[i].ID=strings.TrimSpace(rows[i].Workload) }
+		if strings.TrimSpace(rows[i].ID)=="" { rows[i].ID=strings.TrimSpace(rows[i].Name) }
+		if strings.TrimSpace(rows[i].Workload)=="" { rows[i].Workload=rows[i].ID }
+	}
 	return rows,nil
 }
 
