@@ -25,3 +25,27 @@ func TestRejectDuplicateAndEmptyID(t *testing.T) {
 	if err := r.Register(testAdapter{id:"test"}); err == nil { t.Fatal("expected duplicate ID error") }
 	if err := r.Register(testAdapter{id:" "}); err == nil { t.Fatal("expected empty ID error") }
 }
+
+
+type countingAdapter struct {
+	testAdapter
+	calls *int
+}
+
+func (a countingAdapter) Check(context.Context) Health {
+	*a.calls = *a.calls + 1
+	return Health{Status: "connected"}
+}
+
+func TestListCachesHealthChecks(t *testing.T) {
+	r := NewRegistry()
+	calls := 0
+	if err := r.Register(countingAdapter{testAdapter: testAdapter{id: "cached"}, calls: &calls}); err != nil {
+		t.Fatal(err)
+	}
+	r.List(context.Background())
+	r.List(context.Background())
+	if calls != 1 {
+		t.Fatalf("expected one health check within cache window, got %d", calls)
+	}
+}
