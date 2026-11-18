@@ -178,7 +178,7 @@ func (s *Server) updateManagedGame(w http.ResponseWriter,r *http.Request) {
 	old:=rows[idx]
 	if req.Port==0 {req.Port=old.Port}
 	if req.StorageGB<old.StorageGB {writeJSON(w,400,map[string]string{"error":"Opslag kan alleen worden vergroot; verkleinen kan data beschadigen"});return}
-	if _,err=gameservers.ValidateCreate(gameservers.CreateRequest{Name:old.Name,Game:old.Game,Version:req.Version,RAMGB:req.RAMGB,StorageGB:req.StorageGB,Port:req.Port});err!=nil {writeJSON(w,400,map[string]string{"error":err.Error()});return}
+	if _,err=gameservers.ValidateCreate(gameservers.CreateRequest{Name:old.Name,Game:old.Game,Version:req.Version,RAMGB:req.RAMGB,StorageGB:req.StorageGB,Port:req.Port,AcceptEULA:true});err!=nil {writeJSON(w,400,map[string]string{"error":err.Error()});return}
 	template:=gameservers.Template{}
 	for _,x:=range gameservers.Catalog(){if x.Game==old.Game {template=x;break}}
 	imageTag:="latest"
