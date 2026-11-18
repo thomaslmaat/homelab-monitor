@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - rbac.yaml
+  - game-servers.yaml
   - core.yaml
   - agent.yaml
