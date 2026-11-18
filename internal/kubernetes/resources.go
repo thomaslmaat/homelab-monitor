@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -46,4 +47,16 @@ func ResourcePath(namespace, resource, name string) string {
 
 func (c *Client) PatchResource(ctx context.Context, path string, value any) error {
 	return c.patch(ctx, path, value)
+}
+
+func (c *Client) GetText(ctx context.Context, path string) (string,error) {
+	req,err:=http.NewRequestWithContext(ctx,http.MethodGet,c.baseURL+path,nil)
+	if err!=nil{return "",err}
+	req.Header.Set("Authorization","Bearer "+c.token)
+	resp,err:=c.http.Do(req)
+	if err!=nil{return "",err}
+	defer resp.Body.Close()
+	if resp.StatusCode<200 || resp.StatusCode>=300{return "",fmt.Errorf("Kubernetes API returned %s for logs",resp.Status)}
+	body,err:=io.ReadAll(io.LimitReader(resp.Body,1<<20))
+	return string(body),err
 }
