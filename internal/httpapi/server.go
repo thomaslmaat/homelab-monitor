@@ -73,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/storage", s.storage)
 	mux.HandleFunc("GET /api/v1/integrations", s.integrations)
 	mux.HandleFunc("GET /api/v1/game-servers", s.gameServersInventory)
+	mux.HandleFunc("POST /api/v1/game-servers/{id}/actions", s.gameServerAction)
 	mux.Handle("/", dashboard.Handler())
 	return securityHeaders(s.authMiddleware(mux))
 }
@@ -203,4 +204,76 @@ func (s *Server) gameServersInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"configured": true, "game_servers": gameservers.Resolve(s.gameServers, cluster.Deployments)})
+}
+
+type gameServerActionPayload struct { Action string `json:"action"` }
+
+func (s *Server) gameServerAction(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var target *gameservers.Config
+	for i := range s.gameServers {
+		if s.gameServers[i].ID == id { target = &s.gameServers[i]; break }
+	}
+	if target == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error":"Game server is not registered"})
+		return
+	}
+	if s.kube == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error":"Kubernetes client is unavailable"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	defer r.Body.Close()
+	var payload gameServerActionPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"Invalid action request"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	var err error
+	switch payload.Action {
+	case "start":
+		err = s.kube.ScaleDeployment(ctx, target.Namespace, target.Workload, 1)
+	case "stop":
+		err = s.kube.ScaleDeployment(ctx, target.Namespace, target.Workload, 0)
+	case "restart":
+		cluster := s.kube.Overview(ctx)
+		if !cluster.Available {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error":"Could not verify game server status: "+cluster.Error})
+			return
+		}
+		found, running := false, false
+		for _, d := range cluster.Deployments {
+			if d.Namespace == target.Namespace && d.Name == target.Workload {
+				found = true
+				running = d.Desired > 0
+				break
+			}
+		}
+		if !found {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error":"Configured Deployment was not found"})
+			return
+		}
+		if !running {
+			writeJSON(w, http.StatusConflict, map[string]string{"error":"Start the stopped game server before restarting it"})
+			return
+		}
+		err = s.kube.RestartDeployment(ctx, target.Namespace, target.Workload)
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"Action must be start, stop or restart"})
+		return
+	}
+	if err != nil {
+		log.Printf("game server action failed: user=%q id=%q action=%q error=%v", sessionUser(r), id, payload.Action, err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error":"Kubernetes could not apply the action: "+err.Error()})
+		return
+	}
+	log.Printf("game server action accepted: user=%q id=%q game=%q action=%q namespace=%q workload=%q", sessionUser(r), id, target.Game, payload.Action, target.Namespace, target.Workload)
+	writeJSON(w, http.StatusAccepted, map[string]string{"status":"accepted","action":payload.Action,"id":id})
+}
+
+func sessionUser(r *http.Request) string {
+	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" { return "authenticated" }
+	return "unknown"
 }
