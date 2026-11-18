@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,9 @@ type Server struct {
 	kube  *kubernetes.Client
 	registry *integrations.Registry
 	gameServers []gameservers.Config
+	authMu sync.Mutex
+	sessions map[string]authSession
+	loginAttempts map[string]loginAttempt
 }
 type HostView struct {
 	model.HostMetrics
@@ -31,7 +35,8 @@ type HostView struct {
 }
 
 func New(store *storage.Store, kube *kubernetes.Client) *Server {
-	s := &Server{store: store, token: os.Getenv("HOMELAB_MONITOR_TOKEN"), kube: kube, registry: integrations.NewRegistry()}
+	s := &Server{store: store, token: os.Getenv("HOMELAB_MONITOR_TOKEN"), kube: kube, registry: integrations.NewRegistry(), sessions: make(map[string]authSession), loginAttempts: make(map[string]loginAttempt)}
+	if store != nil { if err := s.bootstrapAdmin(); err != nil { log.Printf("dashboard admin bootstrap failed: %v", err) } }
 	configured, err := gameservers.Parse(os.Getenv("GAME_SERVERS_JSON"))
 	if err != nil { log.Printf("game server configuration rejected: %v", err) } else { s.gameServers = configured }
 	_ = s.registry.Register(integrations.FuncAdapter{AdapterID:"kubernetes", DisplayName:"Kubernetes API", AdapterKind:"infrastructure", AdapterVersion:"built-in", Supported:[]integrations.Capability{{ID:"resources.read",Description:"Read cluster nodes, pods and deployments"}}, HealthCheck:func(ctx context.Context) integrations.Health {
@@ -56,6 +61,10 @@ func New(store *storage.Store, kube *kubernetes.Client) *Server {
 }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
+	mux.HandleFunc("POST /api/v1/auth/login", s.login)
+	mux.HandleFunc("POST /api/v1/auth/password", s.changePassword)
+	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("POST /api/v1/metrics", s.ingest)
 	mux.HandleFunc("GET /api/v1/hosts", s.hosts)
@@ -65,7 +74,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/integrations", s.integrations)
 	mux.HandleFunc("GET /api/v1/game-servers", s.gameServersInventory)
 	mux.Handle("/", dashboard.Handler())
-	return securityHeaders(mux)
+	return securityHeaders(s.authMiddleware(mux))
 }
 func (s *Server) authorized(r *http.Request) bool {
 	return s.token == "" || strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")) == s.token
