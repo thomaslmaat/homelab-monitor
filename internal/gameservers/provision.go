@@ -7,7 +7,16 @@ import (
 )
 
 var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-var versionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+:-]{0,63}$`)
+var versionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}package gameservers
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+var versionPattern = regexp.MustCompile()
 
 type CreateRequest struct {
 	Name string `json:"name"`
