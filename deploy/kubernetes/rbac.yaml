@@ -13,7 +13,7 @@ rules:
     resources: ["nodes", "pods", "namespaces", "events", "persistentvolumes", "persistentvolumeclaims"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["longhorn.io"]
-    resources: ["volumes"]
+    resources: ["volumes", "replicas"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]

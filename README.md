@@ -83,7 +83,7 @@ The current preference storage is browser-local (not yet synchronized between br
 
 ### Integrations and permissions
 
-The Core uses read-only Kubernetes API access. At minimum, its ServiceAccount needs `get`, `list` and `watch` on nodes, pods, namespaces, events, deployments, daemonsets, statefulsets, replicasets, persistentvolumes, persistentvolumeclaims and the Longhorn `volumes.longhorn.io` resource. Do not grant write permissions for dashboard monitoring.
+The Core uses read-only Kubernetes API access. At minimum, its ServiceAccount needs `get`, `list` and `watch` on nodes, pods, namespaces, events, deployments, daemonsets, statefulsets, replicasets, persistentvolumes, persistentvolumeclaims and the Longhorn `volumes.longhorn.io` and `replicas.longhorn.io` resources. Do not grant write permissions for dashboard monitoring.
 
 Only integrations that have a working API connector and the required RBAC/credentials can show live data. A plugin card is not a substitute for configuring that service. The initial registry exposes read-only capabilities only; it does not yet provide game-server power actions or third-party integrations.
 
