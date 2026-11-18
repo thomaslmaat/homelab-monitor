@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,25 +43,59 @@ type Snapshot struct {
 	Health       Health       `json:"health"`
 }
 
-type Registry struct { adapters map[string]Adapter }
+type Registry struct {
+	mu         sync.RWMutex
+	adapters   map[string]Adapter
+	cached     []Snapshot
+	cacheUntil time.Time
+}
+
+const healthCacheTTL = 30 * time.Second
 
 func NewRegistry() *Registry { return &Registry{adapters: make(map[string]Adapter)} }
 
 func (r *Registry) Register(a Adapter) error {
 	if a == nil { return fmt.Errorf("adapter is required") }
 	id := strings.TrimSpace(a.ID())
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if id == "" { return fmt.Errorf("adapter ID is required") }
 	if strings.TrimSpace(a.Name()) == "" || strings.TrimSpace(a.Kind()) == "" || strings.TrimSpace(a.Version()) == "" {
 		return fmt.Errorf("adapter %q must define name, kind and version", id)
 	}
 	if _, exists := r.adapters[id]; exists { return fmt.Errorf("adapter %q is already registered", id) }
 	r.adapters[id] = a
+	r.cacheUntil = time.Time{}
 	return nil
 }
 
+func cloneSnapshots(in []Snapshot) []Snapshot {
+	out := make([]Snapshot, len(in))
+	for i, item := range in {
+		out[i] = item
+		out[i].Capabilities = append([]Capability(nil), item.Capabilities...)
+	}
+	return out
+}
+
+// List caches adapter health checks briefly. This avoids repeatedly querying the
+// Kubernetes and Longhorn APIs on every dashboard refresh.
 func (r *Registry) List(ctx context.Context) []Snapshot {
-	out := make([]Snapshot, 0, len(r.adapters))
+	now := time.Now()
+	r.mu.RLock()
+	if now.Before(r.cacheUntil) {
+		out := cloneSnapshots(r.cached)
+		r.mu.RUnlock()
+		return out
+	}
+	adapters := make([]Adapter, 0, len(r.adapters))
 	for _, a := range r.adapters {
+		adapters = append(adapters, a)
+	}
+	r.mu.RUnlock()
+
+	out := make([]Snapshot, 0, len(adapters))
+	for _, a := range adapters {
 		health := a.Check(ctx)
 		if health.Status == "" { health.Status = "unknown" }
 		if health.CheckedAt.IsZero() { health.CheckedAt = time.Now().UTC() }
@@ -68,6 +103,11 @@ func (r *Registry) List(ctx context.Context) []Snapshot {
 		out = append(out, Snapshot{ID:a.ID(), Name:a.Name(), Kind:a.Kind(), Version:a.Version(), Capabilities:caps, Health:health})
 	}
 	sort.Slice(out, func(i,j int) bool { return out[i].ID < out[j].ID })
+
+	r.mu.Lock()
+	r.cached = cloneSnapshots(out)
+	r.cacheUntil = time.Now().Add(healthCacheTTL)
+	r.mu.Unlock()
 	return out
 }
 
