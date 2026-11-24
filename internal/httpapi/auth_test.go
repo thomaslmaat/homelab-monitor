@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thomaslmaat/homelab-monitor/internal/storage"
 )
@@ -77,4 +78,27 @@ func TestRoleAccess(t *testing.T) {
 			t.Errorf("roleAccess(%q)=(%t,%t,%t), want (%t,%t,%t)",tt.role,monitor,servers,admin,tt.monitor,tt.servers,tt.admin)
 		}
 	}
+}
+
+func TestMonitorRoleCannotUseServerManagementOrUserAdminAPI(t *testing.T) {
+	store,err:=storage.Open(t.TempDir()+"/roles-test.db")
+	if err!=nil { t.Fatal(err) }
+	defer store.Close()
+	s:=New(store,nil)
+	salt,err:=randomBytes(16)
+	if err!=nil { t.Fatal(err) }
+	if err=store.CreateDashboardUser(t.Context(),"monitor-user", "c2FsdA", encodeHash("temporary-password",[]byte("salt")), "monitor");err!=nil { t.Fatal(err) }
+	s.sessions["monitor-session"]=authSession{Username:"monitor-user",Expires:time.Now().Add(time.Hour)}
+	handler:=s.Handler()
+	request:=func(path string) int {
+		rec:=httptest.NewRecorder()
+		req:=httptest.NewRequest(http.MethodGet,path,nil)
+		req.AddCookie(&http.Cookie{Name:sessionCookie,Value:"monitor-session"})
+		handler.ServeHTTP(rec,req)
+		return rec.Code
+	}
+	if got:=request("/api/v1/overview");got!=http.StatusOK { t.Errorf("monitor role overview status=%d, want 200",got) }
+	if got:=request("/api/v1/game-servers");got!=http.StatusForbidden { t.Errorf("monitor role game server status=%d, want 403",got) }
+	if got:=request("/api/v1/users");got!=http.StatusForbidden { t.Errorf("monitor role user admin status=%d, want 403",got) }
+	_ = salt
 }
