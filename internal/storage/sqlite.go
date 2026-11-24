@@ -26,12 +26,26 @@ func Open(path string) (*Store, error) {
 	} {
 		if _, err := db.Exec(q); err != nil { db.Close(); return nil, err }
 	}
-	if _, err := db.Exec(`ALTER TABLE dashboard_users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") { db.Close(); return nil, err }
+	// Migrate legacy role-based accounts once to independent permissions.
+	rows, err := db.Query(`PRAGMA table_info(dashboard_users)`)
+	if err != nil { db.Close(); return nil, err }
+	hasMonitor := false
+	for rows.Next() { var cid, notnull, pk int; var name, typ string; var dflt any; if err := rows.Scan(&cid,&name,&typ,&notnull,&dflt,&pk); err != nil { rows.Close(); db.Close(); return nil, err }; if name == "can_monitor" { hasMonitor = true } }
+	rows.Close()
+	for _, column := range []string{"can_monitor","can_manage_servers","can_manage_users"} {
+		if _, err := db.Exec(`ALTER TABLE dashboard_users ADD COLUMN `+column+` INTEGER NOT NULL DEFAULT 0`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") { db.Close(); return nil, err }
+	}
+	if !hasMonitor {
+		if _, err := db.Exec(`UPDATE dashboard_users SET
+			can_monitor=CASE WHEN role IN ('admin','monitor','both') THEN 1 ELSE 0 END,
+			can_manage_servers=CASE WHEN role IN ('admin','servers','both') THEN 1 ELSE 0 END,
+			can_manage_users=CASE WHEN role='admin' THEN 1 ELSE 0 END`); err != nil { db.Close(); return nil, err }
+	}
 	return &Store{db}, nil
 }
 
 func (s *Store) EnsureDashboardAdmin(ctx context.Context, salt, hash string) error {
-	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO dashboard_users(username,salt,password_hash,must_change_password) VALUES('admin',?,?,1)`, salt, hash)
+	_, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO dashboard_users(username,salt,password_hash,must_change_password,can_monitor,can_manage_servers,can_manage_users) VALUES('admin',?,?,1,1,1,1)`, salt, hash)
 	return err
 }
 
@@ -73,16 +87,24 @@ func (s *Store) Prune(ctx context.Context, retention time.Duration) error {
 }
 func (s *Store) Close() error { return s.db.Close() }
 
+type DashboardPermissions struct {
+	Monitor bool `json:"monitor"`
+	ManageServers bool `json:"manage_servers"`
+	ManageUsers bool `json:"manage_users"`
+}
+
 type DashboardAccount struct {
 	Username string `json:"username"`
-	Role string `json:"role"`
+	Permissions DashboardPermissions `json:"permissions"`
 	MustChangePassword bool `json:"must_change_password"`
 }
 
-func (s *Store) DashboardRole(ctx context.Context, username string) (string, error) {
-	var role string
-	err := s.db.QueryRowContext(ctx, `SELECT role FROM dashboard_users WHERE username=?`, username).Scan(&role)
-	return role, err
+func (s *Store) DashboardPermissions(ctx context.Context, username string) (DashboardPermissions, error) {
+	var p DashboardPermissions
+	var monitor, servers, users int
+	err := s.db.QueryRowContext(ctx, `SELECT can_monitor,can_manage_servers,can_manage_users FROM dashboard_users WHERE username=?`, username).Scan(&monitor,&servers,&users)
+	p.Monitor, p.ManageServers, p.ManageUsers = monitor != 0, servers != 0, users != 0
+	return p, err
 }
 
 func (s *Store) AdminMustChangePassword(ctx context.Context) (bool, error) {
@@ -92,27 +114,30 @@ func (s *Store) AdminMustChangePassword(ctx context.Context) (bool, error) {
 }
 
 func (s *Store) ListDashboardUsers(ctx context.Context) ([]DashboardAccount, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT username,role,must_change_password FROM dashboard_users ORDER BY username`)
+	rows, err := s.db.QueryContext(ctx, `SELECT username,can_monitor,can_manage_servers,can_manage_users,must_change_password FROM dashboard_users ORDER BY username`)
 	if err != nil { return nil, err }
 	defer rows.Close()
 	out := []DashboardAccount{}
 	for rows.Next() {
 		var u DashboardAccount
-		var required int
-		if err := rows.Scan(&u.Username,&u.Role,&required); err != nil { return nil, err }
+		var monitor, servers, users, required int
+		if err := rows.Scan(&u.Username,&monitor,&servers,&users,&required); err != nil { return nil, err }
+		u.Permissions = DashboardPermissions{Monitor:monitor != 0, ManageServers:servers != 0, ManageUsers:users != 0}
 		u.MustChangePassword = required != 0
 		out = append(out,u)
 	}
 	return out, rows.Err()
 }
 
-func (s *Store) CreateDashboardUser(ctx context.Context, username, salt, hash, role string) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO dashboard_users(username,salt,password_hash,must_change_password,role) VALUES(?,?,?,1,?)`, username,salt,hash,role)
+func (s *Store) CreateDashboardUser(ctx context.Context, username, salt, hash string, p DashboardPermissions) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO dashboard_users(username,salt,password_hash,must_change_password,can_monitor,can_manage_servers,can_manage_users) VALUES(?,?,?,1,?,?,?)`, username,salt,hash,boolInt(p.Monitor),boolInt(p.ManageServers),boolInt(p.ManageUsers))
 	return err
 }
 
-func (s *Store) UpdateDashboardUserRole(ctx context.Context, username, role string) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE dashboard_users SET role=? WHERE username=?`, role,username)
+func boolInt(value bool) int { if value { return 1 }; return 0 }
+
+func (s *Store) UpdateDashboardPermissions(ctx context.Context, username string, p DashboardPermissions) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE dashboard_users SET can_monitor=?,can_manage_servers=?,can_manage_users=? WHERE username=?`, boolInt(p.Monitor),boolInt(p.ManageServers),boolInt(p.ManageUsers),username)
 	if err != nil { return err }
 	changed, err := result.RowsAffected()
 	if err != nil { return err }
