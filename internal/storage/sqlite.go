@@ -120,3 +120,8 @@ func (s *Store) DeleteDashboardUser(ctx context.Context, username string) error 
 	_, err := s.db.ExecContext(ctx, `DELETE FROM dashboard_users WHERE username=? AND username<>'admin'`, username)
 	return err
 }
+
+func (s *Store) ResetDashboardPassword(ctx context.Context, username, salt, hash string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE dashboard_users SET salt=?,password_hash=?,must_change_password=1 WHERE username=?`, salt,hash,username)
+	return err
+}
