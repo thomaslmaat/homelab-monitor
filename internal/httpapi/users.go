@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/thomaslmaat/homelab-monitor/internal/storage"
 )
 
 var dashboardUsernamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{3,32}$`)
@@ -13,21 +15,12 @@ var dashboardUsernamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{3,32}$`)
 type createUserPayload struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
-	Role string `json:"role"`
+	Permissions storage.DashboardPermissions `json:"permissions"`
 }
 
 type updateUserPayload struct {
-	Role string `json:"role"`
+	Permissions storage.DashboardPermissions `json:"permissions"`
 	Password string `json:"password"`
-}
-
-func validDashboardRole(role string) bool {
-	switch role {
-	case "admin", "monitor", "servers", "both":
-		return true
-	default:
-		return false
-	}
 }
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
@@ -56,21 +49,17 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"Het tijdelijke wachtwoord moet minimaal 12 tekens bevatten"})
 		return
 	}
-	if !validDashboardRole(p.Role) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"Ongeldige gebruikersrol"})
-		return
-	}
 	salt, err := randomBytes(16)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"Kon geen wachtwoord beveiligen"})
 		return
 	}
-	err = s.store.CreateDashboardUser(r.Context(), p.Username, base64.RawStdEncoding.EncodeToString(salt), encodeHash(p.Password,salt), p.Role)
+	err = s.store.CreateDashboardUser(r.Context(), p.Username, base64.RawStdEncoding.EncodeToString(salt), encodeHash(p.Password,salt), p.Permissions)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{"error":"Deze gebruikersnaam bestaat al"})
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"status":"created","username":p.Username,"role":p.Role,"must_change_password":true})
+	writeJSON(w, http.StatusCreated, map[string]any{"status":"created","username":p.Username,"permissions":p.Permissions,"must_change_password":true})
 }
 
 func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
@@ -86,15 +75,11 @@ func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"Ongeldig verzoek"})
 		return
 	}
-	if !validDashboardRole(p.Role) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"Ongeldige gebruikersrol"})
-		return
-	}
 	if p.Password != "" && len(p.Password) < 12 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error":"Een nieuw wachtwoord moet minimaal 12 tekens bevatten"})
 		return
 	}
-	if err := s.store.UpdateDashboardUserRole(r.Context(), username, p.Role); err != nil {
+	if err := s.store.UpdateDashboardPermissions(r.Context(), username, p.Permissions); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error":"Gebruikersrol kon niet worden bijgewerkt"})
 		return
 	}
@@ -109,7 +94,7 @@ func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status":"updated","username":username,"role":p.Role,"password_reset":p.Password != ""})
+	writeJSON(w, http.StatusOK, map[string]any{"status":"updated","username":username,"permissions":p.Permissions,"password_reset":p.Password != ""})
 }
 
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
