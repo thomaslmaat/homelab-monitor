@@ -87,6 +87,7 @@ func TestMonitorRoleCannotUseServerManagementOrUserAdminAPI(t *testing.T) {
 	defer store.Close()
 	s:=New(store,nil)
 	if err=store.CreateDashboardUser(context.Background(),"monitor-user", "c2FsdA", encodeHash("temporary-password",[]byte("salt")), "monitor");err!=nil { t.Fatal(err) }
+	if err=store.SetDashboardPassword(context.Background(),"monitor-user","c2FsdA",encodeHash("temporary-password",[]byte("salt")));err!=nil { t.Fatal(err) }
 	s.sessions["monitor-session"]=authSession{Username:"monitor-user",Expires:time.Now().Add(time.Hour)}
 	handler:=s.Handler()
 	request:=func(path string) int {
