@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"github.com/thomaslmaat/homelab-monitor/internal/model"
 	_ "modernc.org/sqlite"
 	"time"
@@ -21,10 +22,11 @@ func Open(path string) (*Store, error) {
 		`PRAGMA synchronous=NORMAL`,
 		`CREATE TABLE IF NOT EXISTS host_metrics (id INTEGER PRIMARY KEY AUTOINCREMENT, hostname TEXT NOT NULL, collected_at TEXT NOT NULL, payload TEXT NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS idx_host_metrics_host_time ON host_metrics(hostname,collected_at DESC)`,
-		`CREATE TABLE IF NOT EXISTS dashboard_users (username TEXT PRIMARY KEY, salt TEXT NOT NULL, password_hash TEXT NOT NULL, must_change_password INTEGER NOT NULL DEFAULT 1)`,
+		`CREATE TABLE IF NOT EXISTS dashboard_users (username TEXT PRIMARY KEY, salt TEXT NOT NULL, password_hash TEXT NOT NULL, must_change_password INTEGER NOT NULL DEFAULT 1, role TEXT NOT NULL DEFAULT 'admin')`,
 	} {
 		if _, err := db.Exec(q); err != nil { db.Close(); return nil, err }
 	}
+	if _, err := db.Exec(`ALTER TABLE dashboard_users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") { db.Close(); return nil, err }
 	return &Store{db}, nil
 }
 
@@ -70,3 +72,64 @@ func (s *Store) Prune(ctx context.Context, retention time.Duration) error {
 	return err
 }
 func (s *Store) Close() error { return s.db.Close() }
+
+type DashboardAccount struct {
+	Username string `json:"username"`
+	Role string `json:"role"`
+	MustChangePassword bool `json:"must_change_password"`
+}
+
+func (s *Store) DashboardRole(ctx context.Context, username string) (string, error) {
+	var role string
+	err := s.db.QueryRowContext(ctx, `SELECT role FROM dashboard_users WHERE username=?`, username).Scan(&role)
+	return role, err
+}
+
+func (s *Store) AdminMustChangePassword(ctx context.Context) (bool, error) {
+	var required int
+	err := s.db.QueryRowContext(ctx, `SELECT must_change_password FROM dashboard_users WHERE username='admin'`).Scan(&required)
+	return required != 0, err
+}
+
+func (s *Store) ListDashboardUsers(ctx context.Context) ([]DashboardAccount, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT username,role,must_change_password FROM dashboard_users ORDER BY username`)
+	if err != nil { return nil, err }
+	defer rows.Close()
+	out := []DashboardAccount{}
+	for rows.Next() {
+		var u DashboardAccount
+		var required int
+		if err := rows.Scan(&u.Username,&u.Role,&required); err != nil { return nil, err }
+		u.MustChangePassword = required != 0
+		out = append(out,u)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateDashboardUser(ctx context.Context, username, salt, hash, role string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO dashboard_users(username,salt,password_hash,must_change_password,role) VALUES(?,?,?,1,?)`, username,salt,hash,role)
+	return err
+}
+
+func (s *Store) UpdateDashboardUserRole(ctx context.Context, username, role string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE dashboard_users SET role=? WHERE username=?`, role,username)
+	if err != nil { return err }
+	changed, err := result.RowsAffected()
+	if err != nil { return err }
+	if changed == 0 { return sql.ErrNoRows }
+	return nil
+}
+
+func (s *Store) DeleteDashboardUser(ctx context.Context, username string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM dashboard_users WHERE username=? AND username<>'admin'`, username)
+	if err != nil { return err }
+	changed, err := result.RowsAffected()
+	if err != nil { return err }
+	if changed == 0 { return sql.ErrNoRows }
+	return nil
+}
+
+func (s *Store) ResetDashboardPassword(ctx context.Context, username, salt, hash string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE dashboard_users SET salt=?,password_hash=?,must_change_password=1 WHERE username=?`, salt,hash,username)
+	return err
+}
