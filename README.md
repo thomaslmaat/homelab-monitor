@@ -69,14 +69,16 @@ docker build --build-arg COMPONENT=agent -t homelab-monitor-agent:dev .
 
 Dashboard API endpoints require an authenticated session. The first startup creates the default account `admin` / `admin`; the first login is blocked from dashboard use until the password is changed to one of at least 12 characters. The default-password hint is shown only while that initial password is still active. Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes in the Core SQLite database, never as plaintext. Login sessions use HttpOnly, SameSite=Strict cookies and expire after 12 hours. The metrics ingest endpoint remains separate for in-cluster Agents. Keep the Core behind a trusted ingress/VPN and use HTTPS when accessing it outside localhost; do not expose the Core directly to the public internet.
 
-Administrators can use **Gebruikers** in the dashboard to create accounts, change permissions, reset passwords or remove users. New users must change their temporary password on first login. Available roles:
-- `admin`: monitoring, server management and user administration.
-- `monitor`: read-only access to monitoring pages and APIs.
-- `servers`: game server creation and management, without monitoring access.
-- `both`: monitoring and game server management, without user administration.
+Administrators can use **Gebruikers** in the dashboard to create accounts, assign individual permissions, reset passwords or remove users. New users must change their temporary password on first login.
 
-Role checks are enforced by the Core API as well as by dashboard navigation. Existing accounts receive the `admin` role when the role column is added during the SQLite migration.
+Permissions are independent switches; any combination can be assigned to each account:
+- `monitor`: view monitoring dashboards and monitoring APIs.
+- `manage_servers`: create, configure, start, stop and remove game servers.
+- `manage_users`: create users, change permissions, reset passwords and remove users.
 
+For example, Pietje can receive both monitoring and server management, Puk can receive monitoring only, and the administrator can receive all three permissions. The built-in `admin` account always has all permissions and cannot be edited or deleted through the user panel.
+
+Permission checks are enforced by the Core API as well as by dashboard navigation. Existing accounts are migrated from their previous roles to the equivalent individual permissions, so existing access is preserved.
 ## Customizable dashboard (v0.3)
 
 The dashboard now supports a personal widget layout:
