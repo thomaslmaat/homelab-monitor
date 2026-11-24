@@ -49,20 +49,9 @@ func (s *Server) authStatus(w http.ResponseWriter,r *http.Request) {
 	if !ok { writeJSON(w,http.StatusOK,map[string]any{"authenticated":false,"default_password_available":defaultAvailable}); return }
 	_,_,mustChange,err:=s.store.DashboardUser(r.Context(),username)
 	if err!=nil { writeJSON(w,500,map[string]string{"error":"could not read account"});return }
-	role,err:=s.store.DashboardRole(r.Context(),username)
+	permissions,err:=s.store.DashboardPermissions(r.Context(),username)
 	if err!=nil { writeJSON(w,500,map[string]string{"error":"could not read account permissions"});return }
-	canMonitor,canManage,isAdmin:=roleAccess(role)
-	writeJSON(w,200,map[string]any{"authenticated":true,"username":username,"role":role,"must_change_password":mustChange,"default_password_available":defaultAvailable,"can_monitor":canMonitor,"can_manage_servers":canManage,"is_admin":isAdmin})
-}
-
-func roleAccess(role string) (canMonitor,canManage,isAdmin bool) {
-	switch role {
-	case "admin": return true,true,true
-	case "monitor": return true,false,false
-	case "servers": return false,true,false
-	case "both": return true,true,false
-	default: return false,false,false
-	}
+	writeJSON(w,200,map[string]any{"authenticated":true,"username":username,"must_change_password":mustChange,"default_password_available":defaultAvailable,"can_monitor":permissions.Monitor,"can_manage_servers":permissions.ManageServers,"can_manage_users":permissions.ManageUsers,"permissions":permissions})
 }
 func (s *Server) login(w http.ResponseWriter,r *http.Request) {
 	ip:=clientIP(r); now:=time.Now()
@@ -119,16 +108,15 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		_,_,mustChange,err:=s.store.DashboardUser(r.Context(),username)
 		if err!=nil { writeJSON(w,500,map[string]string{"error":"could not read account"});return }
 		if mustChange && path!="/api/v1/auth/password" { writeJSON(w,403,map[string]string{"error":"password_change_required"});return }
-		role,err:=s.store.DashboardRole(r.Context(),username)
+		permissions,err:=s.store.DashboardPermissions(r.Context(),username)
 		if err!=nil { writeJSON(w,500,map[string]string{"error":"could not read account permissions"});return }
-		canMonitor,canManage,isAdmin:=roleAccess(role)
 		switch {
 		case path=="/api/v1/users" || strings.HasPrefix(path,"/api/v1/users/"):
-			if !isAdmin { writeJSON(w,403,map[string]string{"error":"permission_denied"});return }
+			if !permissions.ManageUsers { writeJSON(w,403,map[string]string{"error":"permission_denied"});return }
 		case strings.HasPrefix(path,"/api/v1/game-servers"):
-			if !canManage { writeJSON(w,403,map[string]string{"error":"permission_denied"});return }
+			if !permissions.ManageServers { writeJSON(w,403,map[string]string{"error":"permission_denied"});return }
 		case path=="/api/v1/hosts" || path=="/api/v1/history" || path=="/api/v1/overview" || path=="/api/v1/storage" || path=="/api/v1/integrations":
-			if !canMonitor { writeJSON(w,403,map[string]string{"error":"permission_denied"});return }
+			if !permissions.Monitor { writeJSON(w,403,map[string]string{"error":"permission_denied"});return }
 		}
 		next.ServeHTTP(w,r)
 	})

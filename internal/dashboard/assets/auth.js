@@ -140,7 +140,7 @@
     const permissions = {
       can_monitor: auth.can_monitor === true,
       can_manage_servers: auth.can_manage_servers === true,
-      is_admin: auth.is_admin === true
+      can_manage_users: auth.can_manage_users === true
     };
     window.hmPermissions = permissions;
     document.body.dataset.role = auth.role || 'unknown';
@@ -151,7 +151,7 @@
     if (!permissions.can_monitor && permissions.can_manage_servers) {
       if (location.hash !== '#game-servers') location.hash = 'game-servers';
     }
-    if (permissions.is_admin) addUserAdministration();
+    if (permissions.can_manage_users) addUserAdministration();
     window.dispatchEvent(new CustomEvent('hm-auth-ready', {detail: permissions}));
   }
 
@@ -179,7 +179,7 @@
             <h3>Nieuwe gebruiker</h3>
             <label>Gebruikersnaam<input name="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+"></label>
             <label>Tijdelijk wachtwoord<input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
-            <label>Rechten<select name="role"><option value="monitor">Alleen monitoring</option><option value="servers">Alleen serverbeheer</option><option value="both">Monitoring + serverbeheer</option><option value="admin">Beheerder</option></select></label>
+            <fieldset class="permission-checks"><legend>Rechten</legend><label><input type="checkbox" name="monitor"> Monitoring bekijken</label><label><input type="checkbox" name="manage_servers"> Game servers beheren</label><label><input type="checkbox" name="manage_users"> Gebruikers beheren (beheerder)</label></fieldset>
             <button type="submit">Gebruiker aanmaken</button><p id="user-admin-message" role="status"></p>
           </form>
           <h3>Bestaande gebruikers</h3><div id="user-admin-list">Laden…</div>
@@ -204,14 +204,14 @@
       const response = await fetch('/api/v1/users', {credentials:'same-origin', cache:'no-store'});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Gebruikers ophalen mislukt');
-      const labels = {admin:'Beheerder',monitor:'Alleen monitoring',servers:'Alleen serverbeheer',both:'Monitoring + serverbeheer'};
+      const permissionLabels = {monitor:'Monitoring bekijken',manage_servers:'Game servers beheren',manage_users:'Gebruikers beheren'};
       list.innerHTML = '<div class="user-admin-rows">' + (data.users || []).map(user => `
         <article class="user-admin-row" data-username="${escapeHTML(user.username)}">
-          <div><b>${escapeHTML(user.username)}</b><small>${user.must_change_password ? 'Wachtwoord wijzigen bij eerste login' : 'Account actief'}</small></div>
-          <select aria-label="Rechten voor ${escapeHTML(user.username)}" data-role-select ${user.username === 'admin' ? 'disabled' : ''}>
-            ${Object.entries(labels).map(([value,label]) => `<option value="${value}" ${user.role === value ? 'selected' : ''}>${label}</option>`).join('')}
-          </select>
-          ${user.username === 'admin' ? '<span class="user-protected">Vast account</span>' : '<input type="password" data-reset-password placeholder="Nieuw wachtwoord (optioneel)" minlength="12" aria-label="Nieuw wachtwoord"><button type="button" data-save-user>Opslaan</button><button type="button" class="user-delete" data-delete-user>Verwijderen</button>'}
+          <div class="user-admin-identity"><b>${escapeHTML(user.username)}</b><small>${user.must_change_password ? 'Wachtwoord wijzigen bij eerste login' : 'Account actief'}</small></div>
+          <fieldset class="user-row-permissions" ${user.username === 'admin' ? 'disabled' : ''}>
+            ${Object.entries(permissionLabels).map(([key,label]) => `<label><input type="checkbox" data-permission="${key}" ${user.permissions?.[key] ? 'checked' : ''}> ${label}</label>`).join('')}
+          </fieldset>
+          ${user.username === 'admin' ? '<span class="user-protected">Vast hoofdaccount</span>' : '<div class="user-row-actions"><input type="password" data-reset-password placeholder="Nieuw wachtwoord (optioneel)" minlength="12" aria-label="Nieuw wachtwoord"><button type="button" data-save-user>Opslaan</button><button type="button" class="user-delete" data-delete-user>Verwijderen</button></div>'}
         </article>`).join('') + '</div>';
     } catch (error) {
       list.textContent = error.message;
@@ -222,6 +222,8 @@
     event.preventDefault();
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form).entries());
+    values.permissions = {monitor:form.elements.monitor.checked,manage_servers:form.elements.manage_servers.checked,manage_users:form.elements.manage_users.checked};
+    delete values.monitor; delete values.manage_servers; delete values.manage_users;
     const message = document.getElementById('user-admin-message');
     try {
       const response = await fetch('/api/v1/users', {method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(values)});
@@ -245,7 +247,7 @@
       await refreshUserList();
     }
     if (event.target.matches('[data-save-user]')) {
-      const payload = {role:row.querySelector('[data-role-select]').value,password:row.querySelector('[data-reset-password]').value};
+      const payload = {permissions:{monitor:row.querySelector('[data-permission="monitor"]').checked,manage_servers:row.querySelector('[data-permission="manage_servers"]').checked,manage_users:row.querySelector('[data-permission="manage_users"]').checked},password:row.querySelector('[data-reset-password]').value};
       const response = await fetch('/api/v1/users/' + encodeURIComponent(username), {method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const data = await response.json();
       if (!response.ok) { document.getElementById('user-admin-message').textContent = data.error || 'Opslaan mislukt'; return; }
@@ -255,7 +257,7 @@
   }
 
   function handleUserRoleChange(event) {
-    if (event.target.matches('[data-role-select]')) event.target.closest('.user-admin-row').classList.add('user-row-dirty');
+    if (event.target.matches('[data-permission]')) event.target.closest('.user-admin-row').classList.add('user-row-dirty');
   }
 
   checkSession();
