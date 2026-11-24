@@ -62,23 +62,20 @@ func TestDashboardRequiresLoginAndForcesInitialPasswordChange(t *testing.T) {
 	if allowed.Code==http.StatusUnauthorized { t.Fatal("authenticated dashboard API request was rejected") }
 }
 
-func TestRoleAccess(t *testing.T) {
-	tests := []struct {
-		role string
-		monitor, servers, admin bool
-	}{
-		{"admin",true,true,true},
-		{"monitor",true,false,false},
-		{"servers",false,true,false},
-		{"both",true,true,false},
-		{"unknown",false,false,false},
-	}
-	for _,tt := range tests {
-		monitor,servers,admin:=roleAccess(tt.role)
-		if monitor!=tt.monitor || servers!=tt.servers || admin!=tt.admin {
-			t.Errorf("roleAccess(%q)=(%t,%t,%t), want (%t,%t,%t)",tt.role,monitor,servers,admin,tt.monitor,tt.servers,tt.admin)
-		}
-	}
+func TestIndependentPermissionFlags(t *testing.T) {
+	store,err:=storage.Open(t.TempDir()+"/permissions-test.db")
+	if err!=nil { t.Fatal(err) }
+	defer store.Close()
+	want:=storage.DashboardPermissions{Monitor:true,ManageServers:false,ManageUsers:true}
+	if err=store.CreateDashboardUser(context.Background(),"pietje","c2FsdA",encodeHash("temporary-password",[]byte("salt")),want);err!=nil { t.Fatal(err) }
+	got,err:=store.DashboardPermissions(context.Background(),"pietje")
+	if err!=nil { t.Fatal(err) }
+	if got!=want { t.Fatalf("permissions=%+v, want %+v",got,want) }
+	updated:=storage.DashboardPermissions{Monitor:false,ManageServers:true,ManageUsers:false}
+	if err=store.UpdateDashboardPermissions(context.Background(),"pietje",updated);err!=nil { t.Fatal(err) }
+	got,err=store.DashboardPermissions(context.Background(),"pietje")
+	if err!=nil { t.Fatal(err) }
+	if got!=updated { t.Fatalf("updated permissions=%+v, want %+v",got,updated) }
 }
 
 func TestMonitorRoleCannotUseServerManagementOrUserAdminAPI(t *testing.T) {
@@ -86,7 +83,7 @@ func TestMonitorRoleCannotUseServerManagementOrUserAdminAPI(t *testing.T) {
 	if err!=nil { t.Fatal(err) }
 	defer store.Close()
 	s:=New(store,nil)
-	if err=store.CreateDashboardUser(context.Background(),"monitor-user", "c2FsdA", encodeHash("temporary-password",[]byte("salt")), "monitor");err!=nil { t.Fatal(err) }
+	if err=store.CreateDashboardUser(context.Background(),"monitor-user", "c2FsdA", encodeHash("temporary-password",[]byte("salt")), storage.DashboardPermissions{Monitor:true});err!=nil { t.Fatal(err) }
 	if err=store.SetDashboardPassword(context.Background(),"monitor-user","c2FsdA",encodeHash("temporary-password",[]byte("salt")));err!=nil { t.Fatal(err) }
 	s.sessions["monitor-session"]=authSession{Username:"monitor-user",Expires:time.Now().Add(time.Hour)}
 	handler:=s.Handler()
