@@ -112,13 +112,21 @@ func (s *Store) CreateDashboardUser(ctx context.Context, username, salt, hash, r
 }
 
 func (s *Store) UpdateDashboardUserRole(ctx context.Context, username, role string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE dashboard_users SET role=? WHERE username=?`, role,username)
-	return err
+	result, err := s.db.ExecContext(ctx, `UPDATE dashboard_users SET role=? WHERE username=?`, role,username)
+	if err != nil { return err }
+	changed, err := result.RowsAffected()
+	if err != nil { return err }
+	if changed == 0 { return sql.ErrNoRows }
+	return nil
 }
 
 func (s *Store) DeleteDashboardUser(ctx context.Context, username string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM dashboard_users WHERE username=? AND username<>'admin'`, username)
-	return err
+	result, err := s.db.ExecContext(ctx, `DELETE FROM dashboard_users WHERE username=? AND username<>'admin'`, username)
+	if err != nil { return err }
+	changed, err := result.RowsAffected()
+	if err != nil { return err }
+	if changed == 0 { return sql.ErrNoRows }
+	return nil
 }
 
 func (s *Store) ResetDashboardPassword(ctx context.Context, username, salt, hash string) error {
