@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -85,9 +86,7 @@ func TestMonitorRoleCannotUseServerManagementOrUserAdminAPI(t *testing.T) {
 	if err!=nil { t.Fatal(err) }
 	defer store.Close()
 	s:=New(store,nil)
-	salt,err:=randomBytes(16)
-	if err!=nil { t.Fatal(err) }
-	if err=store.CreateDashboardUser(t.Context(),"monitor-user", "c2FsdA", encodeHash("temporary-password",[]byte("salt")), "monitor");err!=nil { t.Fatal(err) }
+	if err=store.CreateDashboardUser(context.Background(),"monitor-user", "c2FsdA", encodeHash("temporary-password",[]byte("salt")), "monitor");err!=nil { t.Fatal(err) }
 	s.sessions["monitor-session"]=authSession{Username:"monitor-user",Expires:time.Now().Add(time.Hour)}
 	handler:=s.Handler()
 	request:=func(path string) int {
@@ -100,5 +99,4 @@ func TestMonitorRoleCannotUseServerManagementOrUserAdminAPI(t *testing.T) {
 	if got:=request("/api/v1/overview");got!=http.StatusOK { t.Errorf("monitor role overview status=%d, want 200",got) }
 	if got:=request("/api/v1/game-servers");got!=http.StatusForbidden { t.Errorf("monitor role game server status=%d, want 403",got) }
 	if got:=request("/api/v1/users");got!=http.StatusForbidden { t.Errorf("monitor role user admin status=%d, want 403",got) }
-	_ = salt
 }
